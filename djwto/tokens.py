@@ -24,7 +24,6 @@
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, Optional
 
-import pytz
 import uuid
 import jwt
 from django.conf import settings
@@ -42,9 +41,9 @@ def default_process_claims(
     **kwargs: Any
 ) -> Dict[Any, Any]:
     """
-    This function is a default processing of claims that are usually available on JWTs
-    such as `sub`, `iss`, `aud` and so on. It's intention is to work as a general
-    solution for most use cases of JWT creation.
+    Default processing of claims that are usually available on JWTs such as `sub`, `iss`,
+    `aud` and so on. It's intention is to work as a general solution for most use cases
+    of JWT creation.
 
     Separating this step in a contained function allows for customizing the values used
     on each JWT claim, such as, for instance, extracting a specific value of 'audience'
@@ -106,19 +105,19 @@ def default_process_claims(
     # First it builds claims for refresh token and then access token is copied from it.
     exp_timedelta = settings.DJWTO_REFRESH_TOKEN_LIFETIME
 
-    iat = get_current_tz_unix_time()
+    iat = datetime.utcnow()
     if settings.DJWTO_IAT_CLAIM:
         claims['iat'] = iat
 
     if exp_timedelta:
-        _validate_timedelta_setting_claim(exp_timedelta)
-        exp = iat + exp_timedelta.total_seconds()
+        _validate_timedelta_claim(exp_timedelta)
+        exp = iat + exp_timedelta
         claims['exp'] = exp
 
     nbf_timedelta = settings.DJWTO_NBF_LIFETIME
     if nbf_timedelta:
-        _validate_timedelta_setting_claim(exp_timedelta)
-        nbf = iat + nbf_timedelta.total_seconds()
+        _validate_timedelta_claim(exp_timedelta)
+        nbf = iat + nbf_timedelta
         claims['nbf'] = nbf
 
     if settings.DJWTO_JTI_CLAIM:
@@ -131,7 +130,7 @@ def default_process_claims(
     return claims
 
 
-def _validate_timedelta_setting_claim(claim: Optional[timedelta]) -> None:
+def _validate_timedelta_claim(claim: Optional[timedelta]) -> None:
     """
     Receives as input the setting value for a given claim that may contain timedelta
     type, checking if it's valid.
@@ -154,34 +153,6 @@ def _validate_timedelta_setting_claim(claim: Optional[timedelta]) -> None:
         raise ValueError(
             'Refresh token expiration time must be positive.'
         )
-
-
-def get_current_tz_unix_time() -> float:
-    """
-    If `settings.USE_TZ` is set to `True` then this function returns current unix based
-    timestamp with the timezone specified in `settings.TIME_ZONE`; returns UTC base
-    otherwise. This function is helpful for when computing the 'exp' claim from JWT
-    tokens as well as validating their values.
-
-    Returns
-    -------
-      current_timestamp: float
-          Current date expressed in timezoned unix value, in seconds.
-
-    Raises
-    ------
-      ValueError: If chosen settings.TIME_ZONE is not a valid time zone.
-    """
-    tz: str = ''
-    if settings.USE_TZ:
-        tz = settings.TIME_ZONE
-        if tz not in pytz.all_timezones_set:
-            raise ValueError(
-                f'Value {settings.TIME_ZONE} is not valid. Run `import pytz; '
-                'pytz.all_timezones for a list of valid values.'
-            )
-    tz = tz or 'UTC'
-    return datetime.now(pytz.timezone(tz)).timestamp()
 
 
 def get_access_claims_from_refresh(refresh_claims: Dict[Any, Any]) -> Dict[Any, Any]:
@@ -209,13 +180,13 @@ def get_access_claims_from_refresh(refresh_claims: Dict[Any, Any]) -> Dict[Any, 
     # Uses a shallow copy for now. Maybe in the future it might require a deep copy.
     # This forces the tokens to have the claims at the first level of the dict.
     access_claims = refresh_claims.copy()
-    iat = get_current_tz_unix_time()
+    iat = datetime.utcnow()
     if settings.DJWTO_IAT_CLAIM:
         access_claims['iat'] = iat
     access_timedelta = settings.DJWTO_ACCESS_TOKEN_LIFETIME
     if access_timedelta:
-        _validate_timedelta_setting_claim(access_timedelta)
-        access_claims['exp'] = iat + access_timedelta.total_seconds()
+        _validate_timedelta_claim(access_timedelta)
+        access_claims['exp'] = iat + access_timedelta
     return access_claims
 
 

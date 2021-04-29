@@ -36,8 +36,8 @@ AuthCallType = Callable[[HttpRequest], ReturnAuthCallType]
 
 def default_user_authenticate(request: HttpRequest) -> ReturnAuthCallType:
     """
-    Default method used for authenticating users; tools already available in Django are
-    used here.
+    Default method used for authenticating users; uses authentication layer as offered by
+    Django.
 
     Args
     ----

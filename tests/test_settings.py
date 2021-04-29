@@ -23,7 +23,7 @@
 
 from typing import Optional, Union, List
 from datetime import timedelta
-import os
+from typing_extensions import Literal
 
 
 DJWTO_USER_AUTHENTICATE = 'djwto.authenticate.default_user_authenticate'
@@ -43,6 +43,9 @@ DJWTO_SIGNING_KEY: str = 'test key'
 # Only set if Algorithm uses asymetrical signing.
 DJWTO_VERIFYING_KEY: Optional[str] = None
 DJWTO_ALGORITHM: str = 'HS256'
+DJWTO_MODE: Literal['JSON', 'ONE-COOKIE', 'TWO-COOKIES'] = 'JSON'
+DJWTO_REFRESH_COOKIE_PATH: Optional[str] = '/api/token/refresh'
+DJWTO_SAME_SITE: Optional[str] = 'Lax'
 
 SECRET_KEY = 'key'
 INSTALLED_APPS = [
@@ -68,7 +71,7 @@ INSTALLED_APPS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'US/Eastern'
+TIME_ZONE = 'UTC'
 
 USE_I18N = True
 

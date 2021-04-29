@@ -22,6 +22,7 @@
 
 
 import pytest
+from datetime import datetime
 
 from django.contrib.auth.models import User
 
@@ -34,3 +35,8 @@ from django.contrib.auth.models import User
 def django_db_setup(django_db_setup, django_db_blocker):
     with django_db_blocker.unblock():
         User.objects.create_user(username='alice', password='pass')
+
+
+@pytest.fixture(scope='session')
+def date_mock():
+    return datetime(year=2021, month=1, day=1, hour=1, minute=1)

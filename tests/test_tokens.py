@@ -22,7 +22,6 @@
 
 import pytest
 import mock
-import pytz
 import jwt as pyjwt
 from datetime import timedelta
 import djwto.tokens as tokens
@@ -80,11 +79,11 @@ class TestDefaultProcessClaims:
         )
 
     @pytest.mark.django_db
-    def test_default_process_claims(self, settings, rf, monkeypatch):
-        date_mock = mock.Mock()
+    def test_default_process_claims(self, settings, rf, monkeypatch, date_mock):
+        d_mock = mock.Mock()
         uuid_mock = mock.Mock()
 
-        date_mock.return_value = 1
+        d_mock.utcnow.return_value = date_mock
         uuid_mock.uuid4.return_value = 'uuid'
 
         settings.DJWTO_REFRESH_TOKEN_LIFETIME = timedelta(seconds=1)
@@ -93,7 +92,7 @@ class TestDefaultProcessClaims:
         settings.DJWTO_SUB_CLAIM = 'sub'
         settings.DJWTO_AUD_CLAIM = 'aud'
 
-        monkeypatch.setattr('djwto.tokens.get_current_tz_unix_time', date_mock)
+        monkeypatch.setattr('djwto.tokens.datetime', d_mock)
         monkeypatch.setattr('djwto.tokens.uuid', uuid_mock)
         alice = User.objects.get(username='alice')
         request = rf.post('')
@@ -102,41 +101,13 @@ class TestDefaultProcessClaims:
             'iss': 'iss',
             'sub': 'sub',
             'aud': 'aud',
-            'iat': 1,
-            'exp': 2.0,
-            'nbf': 2.0,
+            'iat': date_mock,
+            'exp': date_mock + settings.DJWTO_REFRESH_TOKEN_LIFETIME,
+            'nbf': date_mock + settings.DJWTO_NBF_LIFETIME,
             'jti': 'uuid',
             'username': 'alice',
             'user_id': 1
         }
-
-
-class TestGetCurrentTzUnixTime:
-    def test_get_current_tz_unix_time_raises(self, settings):
-        settings.TIME_ZONE = 'test_tz'
-        with pytest.raises(ValueError) as exec_info:
-            _ = tokens.get_current_tz_unix_time()
-        assert exec_info.value.args[0] == (
-            'Value test_tz is not valid. Run `import pytz; pytz.all_timezones for a '
-            'list of valid values.'
-        )
-
-    def test_get_current_tz_unix_time(self, settings, monkeypatch):
-        tz = 'UTC'
-        settings.TIME_ZONE = tz
-        date_mock = mock.Mock()
-        date_mock.now.return_value.timestamp.return_value = 1
-        monkeypatch.setattr('djwto.tokens.datetime', date_mock)
-        result = tokens.get_current_tz_unix_time()
-        assert result == 1
-        date_mock.now.assert_called_with(pytz.timezone(tz))
-
-        settings.USE_TZ = False
-        tz = 'GMT'
-        settings.TIME_ZONE = tz
-        result = tokens.get_current_tz_unix_time()
-        assert result == 1
-        date_mock.now.assert_called_with(pytz.timezone('UTC'))
 
 
 class TestGetAccessClaimsFromRefresh:
@@ -149,23 +120,24 @@ class TestGetAccessClaimsFromRefresh:
         with pytest.raises(ValueError):
             _ = tokens.get_access_claims_from_refresh({})
 
-    def test_get_access_from_refresh(self, settings, monkeypatch):
+    def test_get_access_from_refresh(self, settings, monkeypatch, date_mock):
         claims = {'sub': 'sub'}
         settings.DJWTO_ACCESS_TOKEN_LIFETIME = None
         settings.DJWTO_IAT_CLAIM = False
         access_claims = tokens.get_access_claims_from_refresh(claims)
         assert access_claims == {'sub': 'sub'}
 
-        date_mock = mock.Mock()
-        date_mock.return_value = 1
-        monkeypatch.setattr('djwto.tokens.get_current_tz_unix_time', date_mock)
+        d_mock = mock.Mock()
+        d_mock.utcnow.return_value = date_mock
+        monkeypatch.setattr('djwto.tokens.datetime', d_mock)
         settings.DJWTO_IAT_CLAIM = True
         access_claims = tokens.get_access_claims_from_refresh(claims)
-        assert access_claims == {'sub': 'sub', 'iat': 1}
+        assert access_claims == {'sub': 'sub', 'iat': date_mock}
 
         settings.DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(seconds=1)
         access_claims = tokens.get_access_claims_from_refresh(claims)
-        assert access_claims == {'sub': 'sub', 'iat': 1, 'exp': 2}
+        expected_exp = date_mock + settings.DJWTO_ACCESS_TOKEN_LIFETIME
+        assert access_claims == {'sub': 'sub', 'iat': date_mock, 'exp': expected_exp}
 
 
 class TestEncodeClaims:
