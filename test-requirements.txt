@@ -1,6 +1,5 @@
 flake8
 django-stubs
-mock
 isort
 typing_extensions
 pytest

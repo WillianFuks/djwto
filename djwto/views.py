@@ -24,50 +24,52 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
-from typing import Any, Dict, Optional, cast
-from django.core.serializers.json import DjangoJSONEncoder
+from typing import Any, Dict
 
 from django.conf import settings
+from django.core.serializers.json import DjangoJSONEncoder
+from django.core.exceptions import ValidationError, ImproperlyConfigured
 from django.http.request import HttpRequest
 from django.http.response import JsonResponse
-from django.utils.module_loading import import_string
 from django.views import View
 
+import djwto.authenticate as auth
 import djwto.tokens as tokens
-from djwto.authenticate import AuthCallType
-from djwto.tokens import ClaimProcessCallType
 
 
-user_authenticate: AuthCallType = import_string(settings.DJWTO_USER_AUTHENTICATE)
-process_claims: ClaimProcessCallType = import_string(settings.DJWTO_CLAIMS_PROCESS)
+HEADERS401 = {'WWW-Authenticate': auth.WWWAUTHENTICATE}
 
 
 class GetTokensView(View):
-    def __init__(
-        self,
-        user_authenticate: AuthCallType = user_authenticate,
-        process_claims: ClaimProcessCallType = process_claims,
-    ):
-        self.user_authenticate = user_authenticate
-        self.process_claims = process_claims
-
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
-        user, errors = self.user_authenticate(request)
+        try:
+            user = auth.user_authenticate(request)
+        except ValidationError as err:
+            return JsonResponse({'error': err.args[0]}, status=401,
+                                headers=HEADERS401)
 
-        if errors['errors']:
-            return JsonResponse(errors)
+        try:
+            refresh_claims = tokens.process_claims(user, request, args, kwargs)
+            access_claims = tokens.get_access_claims_from_refresh(refresh_claims)
 
-        refresh_claims = self.process_claims(user, request, args, kwargs)
-        access_claims = tokens.get_access_claims_from_refresh(refresh_claims)
+            refresh_token = tokens.encode_claims(refresh_claims)
+            access_token = tokens.encode_claims(access_claims)
 
-        refresh_token = tokens.encode_claims(refresh_claims)
-        access_token = tokens.encode_claims(access_claims)
+            return self._build_response(refresh_token,  access_token, refresh_claims,
+                                        access_claims, )
 
-        return self._build_response(refresh_token,  access_token, access_claims)
+        except ImproperlyConfigured:
+            # As it's an internal error then don't return full error message to the
+            # client. It should be handled internally by the server side.
+            return JsonResponse({'error': 'Failed to process request.'}, status=500)
 
-    def _build_response(self, refresh_token: str, access_token: str,
-                        payload: Optional[Dict[str, Any]] = None) -> JsonResponse:
+    def _build_response(
+            self,
+            refresh_token: str,
+            access_token: str,
+            refresh_claims: Dict[str, Any],
+            access_claims: Dict[str, Any],
+    ) -> JsonResponse:
         """
         djwto offers 3 main modes for returning a response: "JSON", "ONE-COOKIE" or
         "TWO-COOKIES". This method builds the http response in accordance to what
@@ -87,12 +89,12 @@ class GetTokensView(View):
           refresh_token: str
               Token already encoded.
           access_token: str
-          payload: Optional[Dict[str, Any]]
+          refresh_claims: Dict[str, Any]
+          access_claims: Dict[str, Any]
               If `settings.DJWTO_MODE == 'TWO-COOKIES'` then it's expected the value of
-              `payload` will contain the values of the access claims in Dict format to be
-              serialized in the cookie content. This allows the front-end to have access
-              to the values. The signature of the cookie is still separated and stored
-              under `HttpOnly` and `Secure` conditions.
+              `access_claims` will be serialized in the cookie content. This allows for
+              the front-end to have access to its values. The signature of the cookie is
+              still separated and stored under `HttpOnly` and `Secure` conditions.
 
         Returns
         -------
@@ -103,11 +105,14 @@ class GetTokensView(View):
         if mode == 'JSON':
             return JsonResponse({'refresh': refresh_token, 'access': access_token})
 
+        access_exp = access_claims.get('exp')
+        refresh_exp = refresh_claims.get('exp')
+
         response = JsonResponse({})
         response.set_cookie(
             'jwt_refresh',
             refresh_token,
-            max_age=cast(int, settings.DJWTO_REFRESH_TOKEN_LIFETIME.total_seconds()),
+            max_age=refresh_exp,
             httponly=True,
             secure=True,
             path=settings.DJWTO_REFRESH_COOKIE_PATH,
@@ -117,33 +122,33 @@ class GetTokensView(View):
             response.set_cookie(
                 'jwt_access',
                 access_token,
-                max_age=cast(int, settings.DJWTO_ACCESS_TOKEN_LIFETIME.total_seconds()),
+                max_age=access_exp,
                 httponly=True,
                 secure=True,
                 samesite=settings.DJWTO_SAME_SITE
             )
             return response
         if mode == 'TWO-COOKIES':
+            jwt, _, signature = access_token.rpartition('.')
+            value = {'jwt': jwt, 'payload': access_claims}
             response.set_cookie(
                 'jwt_access_payload',
-                json.dumps(payload, sort_keys=True, cls=DjangoJSONEncoder),
-                max_age=cast(int, settings.DJWTO_ACCESS_TOKEN_LIFETIME.total_seconds()),
+                json.dumps(value, sort_keys=True, cls=DjangoJSONEncoder),
+                max_age=access_exp,
                 httponly=False,
                 secure=True,
                 samesite=settings.DJWTO_SAME_SITE
             )
             response.set_cookie(
                 'jwt_access_signature',
-                access_token.rpartition('.')[-1],
-                max_age=cast(int, settings.DJWTO_ACCESS_TOKEN_LIFETIME.total_seconds()),
+                signature,
+                max_age=access_exp,
                 httponly=True,
                 secure=True,
                 samesite=settings.DJWTO_SAME_SITE
             )
-
             return response
-
-        raise ValueError(
+        raise ImproperlyConfigured(
             'settings.DJWTO_MODE must be either "JSON", "ONE-COOKIE" or "TWO-COOKIES".'
             f'Received "{mode}" instead.'
         )

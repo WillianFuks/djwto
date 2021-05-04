@@ -26,9 +26,6 @@ from datetime import timedelta
 from typing_extensions import Literal
 
 
-DJWTO_USER_AUTHENTICATE = 'djwto.authenticate.default_user_authenticate'
-DJWTO_CLAIMS_PROCESS = 'djwto.tokens.default_process_claims'
-
 # Refence for each claim: https://tools.ietf.org/html/rfc7519#page-9
 DJWTO_ISS_CLAIM: Optional[str] = None
 DJWTO_SUB_CLAIM: Optional[str] = None

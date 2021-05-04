@@ -29,13 +29,13 @@ import djwto.tokens as tokens
 from django.contrib.auth.models import User
 
 
-class TestDefaultProcessClaims:
-    def test_default_process_claims_raises(self, settings, rf):
+class TestProcessClaims:
+    def test_process_claims_raises(self, settings, rf):
         alice = None
         settings.DJWTO_ISS_CLAIM = 1
         request = rf.post('')
         with pytest.raises(ValueError) as exec_info:
-            _ = tokens.default_process_claims(alice, request)
+            _ = tokens.process_claims(alice, request)
         assert exec_info.value.args[0] == (
             'Value of Issuer must be str. Received int instead.'
         )
@@ -43,7 +43,7 @@ class TestDefaultProcessClaims:
 
         settings.DJWTO_SUB_CLAIM = 1
         with pytest.raises(ValueError) as exec_info:
-            _ = tokens.default_process_claims(alice, request)
+            _ = tokens.process_claims(alice, request)
         assert exec_info.value.args[0] == (
             'Value of Subject must be str. Received int instead.'
         )
@@ -51,14 +51,14 @@ class TestDefaultProcessClaims:
 
         settings.DJWTO_AUD_CLAIM = 1
         with pytest.raises(ValueError) as exec_info:
-            _ = tokens.default_process_claims(alice, request)
+            _ = tokens.process_claims(alice, request)
         assert exec_info.value.args[0] == (
             'Value of Audience must be either List[str] or str. Received int instead.'
         )
 
         settings.DJWTO_AUD_CLAIM = ['1', 1]
         with pytest.raises(ValueError) as exec_info:
-            _ = tokens.default_process_claims(alice, request)
+            _ = tokens.process_claims(alice, request)
         assert exec_info.value.args[0] == (
             'Value of Audience must be either List[str] or str. '
             'Received List[list] instead.'
@@ -67,19 +67,19 @@ class TestDefaultProcessClaims:
 
         settings.DJWTO_REFRESH_TOKEN_LIFETIME = 1
         with pytest.raises(ValueError) as exec_info:
-            _ = tokens.default_process_claims(alice, request)
+            _ = tokens.process_claims(alice, request)
         assert exec_info.value.args[0] == (
             'Refresh token lifetime must be a `timedelta` object.'
         )
         settings.DJWTO_REFRESH_TOKEN_LIFETIME = timedelta(minutes=-1)
         with pytest.raises(ValueError) as exec_info:
-            _ = tokens.default_process_claims(alice, request)
+            _ = tokens.process_claims(alice, request)
         assert exec_info.value.args[0] == (
             'Refresh token expiration time must be positive.'
         )
 
     @pytest.mark.django_db
-    def test_default_process_claims(self, settings, rf, monkeypatch, date_mock):
+    def test_process_claims(self, settings, rf, monkeypatch, date_mock):
         d_mock = mock.Mock()
         uuid_mock = mock.Mock()
 
@@ -96,7 +96,7 @@ class TestDefaultProcessClaims:
         monkeypatch.setattr('djwto.tokens.uuid', uuid_mock)
         alice = User.objects.get(username='alice')
         request = rf.post('')
-        result = tokens.default_process_claims(alice, request)
+        result = tokens.process_claims(alice, request)
         assert result == {
             'iss': 'iss',
             'sub': 'sub',
@@ -109,10 +109,19 @@ class TestDefaultProcessClaims:
             'user_id': 1
         }
 
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_AUD_CLAIM = ['1', '2']
+        settings.DJWTO_REFRESH_TOKEN_LIFETIME = None
+        settings.DJWTO_NBF_LIFETIME = None
+        settings.DJWTO_JTI_CLAIM = None
+        result = tokens.process_claims(None, request)
+        assert result == {'iss': 'iss', 'sub': 'sub', 'aud': ['1', '2']}
+
 
 class TestGetAccessClaimsFromRefresh:
     def test_get_access_from_refresh_raises(self, settings):
         settings.DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(seconds=-1)
+        settings.DJWTO_IAT_CLAIM = False
         with pytest.raises(ValueError):
             _ = tokens.get_access_claims_from_refresh({})
 
@@ -131,13 +140,16 @@ class TestGetAccessClaimsFromRefresh:
         d_mock.utcnow.return_value = date_mock
         monkeypatch.setattr('djwto.tokens.datetime', d_mock)
         settings.DJWTO_IAT_CLAIM = True
+        claims['iat'] = date_mock
         access_claims = tokens.get_access_claims_from_refresh(claims)
-        assert access_claims == {'sub': 'sub', 'iat': date_mock}
+        assert access_claims == {'sub': 'sub', 'iat': date_mock,
+                                 'refresh_iat': 1609462860.0}
 
         settings.DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(seconds=1)
         access_claims = tokens.get_access_claims_from_refresh(claims)
         expected_exp = date_mock + settings.DJWTO_ACCESS_TOKEN_LIFETIME
-        assert access_claims == {'sub': 'sub', 'iat': date_mock, 'exp': expected_exp}
+        assert access_claims == {'sub': 'sub', 'iat': date_mock, 'exp': expected_exp,
+                                 'refresh_iat': 1609462860.0}
 
 
 class TestEncodeClaims:

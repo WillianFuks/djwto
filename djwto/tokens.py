@@ -27,15 +27,13 @@ from typing import Any, Callable, Dict, Optional
 import uuid
 import jwt
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
+from django.contrib.auth.models import User
 from django.http import HttpRequest
-from djwto.authenticate import U
 
 
-ClaimProcessCallType = Callable[[U, HttpRequest, Any, Any], Dict[Any, Any]]
-
-
-def default_process_claims(
-    user: Optional[U],
+def process_claims(
+    user: Optional[User],
     request: HttpRequest,
     *args: Any,
     **kwargs: Any
@@ -53,7 +51,7 @@ def default_process_claims(
 
     Args
     ----
-      user: Optional[U]
+      user: Optional[User]
           Object as retrieved from the database representing the user. It's optional so
           extensions of this function doesn't have to input a user object case it's not
           required.
@@ -67,12 +65,16 @@ def default_process_claims(
     ------
       claims: Dict[Any, Any]
           Default values of claim fields as specified in the `settings.py` file.
+
+    Raises
+    ------
+      ImproperlyConfigured: If values in file `settings.py` are invalid.
     """
     claims: Dict[Any, Any] = {}
     iss = settings.DJWTO_ISS_CLAIM
     if iss:
         if not isinstance(iss, str):
-            raise ValueError(
+            raise ImproperlyConfigured(
                 f'Value of Issuer must be str. Received {type(iss).__name__} instead.'
             )
         claims['iss'] = iss
@@ -80,7 +82,7 @@ def default_process_claims(
     sub = settings.DJWTO_SUB_CLAIM
     if sub:
         if not isinstance(sub, str):
-            raise ValueError(
+            raise ImproperlyConfigured(
                 f'Value of Subject must be str. Received {type(sub).__name__} instead.'
             )
         claims['sub'] = sub
@@ -89,14 +91,14 @@ def default_process_claims(
     if aud:
         if not isinstance(aud, list):
             if not isinstance(aud, str):
-                raise ValueError(
+                raise ImproperlyConfigured(
                     'Value of Audience must be either List[str] or str. '
                     f'Received {type(aud).__name__} instead.'
                 )
         else:
             for e in aud:
                 if not isinstance(e, str):
-                    raise ValueError(
+                    raise ImproperlyConfigured(
                         'Value of Audience must be either List[str] or str. '
                         f'Received List[{type(aud).__name__}] instead.'
                     )
@@ -142,15 +144,15 @@ def _validate_timedelta_claim(claim: Optional[timedelta]) -> None:
 
     Raises
     ------
-      ValueError: If claim is not of type `timedelta`.
+      ImproperlyConfigured: If claim is not of type `timedelta`.
                   If timdelta is negative.
     """
     if not isinstance(claim, timedelta):
-        raise ValueError(
+        raise ImproperlyConfigured(
             'Refresh token lifetime must be a `timedelta` object.'
         )
     if claim.total_seconds() < 0:
-        raise ValueError(
+        raise ImproperlyConfigured(
             'Refresh token expiration time must be positive.'
         )
 
@@ -174,7 +176,7 @@ def get_access_claims_from_refresh(refresh_claims: Dict[Any, Any]) -> Dict[Any, 
 
     Raises
     ------
-      ValueError: If claim is not of type `timedelta`.
+      ImproperlyConfigured: If claim is not of type `timedelta`.
                   If timdelta is negative.
     """
     # Uses a shallow copy for now. Maybe in the future it might require a deep copy.
@@ -182,7 +184,15 @@ def get_access_claims_from_refresh(refresh_claims: Dict[Any, Any]) -> Dict[Any, 
     access_claims = refresh_claims.copy()
     iat = datetime.utcnow()
     if settings.DJWTO_IAT_CLAIM:
+        # Keep the value of the emission of the refresh token which allows for the front-
+        # end to read its value on `DJWTO_MODE == 'TWO-COOKIES'` option and evaluate
+        # whether it's necessary to create a new refresh token. This is useful for
+        # instance on eCommerce websites that might not want to logout a customer that is
+        # still currently active on the website.
+        # The value must be in POSIX timestamp in order to be serialized by pyJWT.
+        refresh_iat = access_claims['iat'].timestamp()
         access_claims['iat'] = iat
+        access_claims['refresh_iat'] = refresh_iat
     access_timedelta = settings.DJWTO_ACCESS_TOKEN_LIFETIME
     if access_timedelta:
         _validate_timedelta_claim(access_timedelta)
