@@ -67,7 +67,7 @@ def user_authenticate(request: HttpRequest) -> User:
 
 
 class JWTAuthentication:
-    def authenticate(self, request: HttpRequest) -> Any:
+    def authenticate(self, request: HttpRequest) -> Dict[str, Any]:
         """
         Extract token expected to be sent in input `request` and assess its validity. If
         still valid, returns general information available in the payload. Notice that
@@ -82,8 +82,16 @@ class JWTAuthentication:
 
         Returns
         -------
+          validated_token: Dict[str, Any]
+              JWT token after validation process.
+
+        Raises
+        ------
+          JWTValidationError: If input token is invalid.
         """
         token = self.get_raw_token_from_request(request)
+        validated_token = self.validate_token(token)
+        return validated_token
 
     @staticmethod
     def validate_token(token: str) -> Dict[Any, Any]:
@@ -152,6 +160,10 @@ class JWTAuthentication:
             'jwt_access_payload' which contains the header and payload of the token and
             'jwt_access_signature' containing the signature to validate the payload.
 
+        `request` may contain a data field named 'jwt_type' which is either 'access'
+        (default) or 'refresh'. This value sets which token cookie to retrieve and is
+        only valid if mode type also sets cookies.
+
         Arguments
         ---------
           request: HttpRequest
@@ -179,34 +191,31 @@ class JWTAuthentication:
                     'Token not found in "HTTP_AUTHORIZATION" header.'
                 )
             token = auth_header.split('Bearer ')[-1]
-            # Either token or the string 'Bearer ' are not available.
+            # Either token or the string 'Bearer ' are not available
             if not token or len(token) == len(auth_header):
                 raise JWTValidationError(
                     'Value in HTTP_AUTHORIZATION header is not valid.'
                 )
             return token
-
-        if settings.DJWTO_MODE == 'ONE-COOKIE':
-            token = request.COOKIES.get('jwt_access', '')
+        # Defaults to 'access' to make it easier on the front-end calls
+        type_ = request.POST.get('jwt_type', 'access')
+        if type_ not in {'access', 'refresh'}:
+            raise JWTValidationError(
+                'Input data "jwt_type" must be either "access" or "refresh".'
+                f' Got "{type_}" instead.'
+            )
+        if settings.DJWTO_MODE == 'ONE-COOKIE' or type_ == 'refresh':
+            token = request.COOKIES.get(f'jwt_{type_}', '')
             if not token:
-                raise JWTValidationError('Cookie "jwt_access" value is empty.')
+                raise JWTValidationError('Cookie "jwt_access" cannot be empty.')
             return token
-
+        # If it made until here then only option is to retrieve access token
         if settings.DJWTO_MODE == 'TWO-COOKIES':
-            signature = request.COOKIES.get('jwt_access_signature')
-            if not signature:
-                raise JWTValidationError('Signature cookie value cannot be empty.')
-            cookie_value = request.COOKIES.get('jwt_access_payload')
-            if not cookie_value:
-                raise JWTValidationError('Access payload cannot be empty.')
-            try:
-                json_cookie_value = json.loads(cookie_value)
-            except json.JSONDecodeError:
-                json_cookie_value = {}
-            finally:
-                if not json_cookie_value or 'jwt' not in json_cookie_value:
-                    raise JWTValidationError('Invalid value of access payload token.')
-            token = f'{json_cookie_value["jwt"]}.{signature}'
+            token = request.COOKIES.get('jwt_access_token')
+            if not token:
+                raise JWTValidationError(
+                    'Cookie "jwt_access_token" cannot be empty.'
+                )
             return token
         raise ImproperlyConfigured(
             'Value of `settings.DJWTO_MODE` is invalid. Expected either "JSON", '

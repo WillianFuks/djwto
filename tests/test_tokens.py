@@ -27,6 +27,7 @@ from datetime import timedelta
 import djwto.tokens as tokens
 
 from django.contrib.auth.models import User
+from django.core.exceptions import ImproperlyConfigured
 
 
 class TestProcessClaims:
@@ -34,7 +35,7 @@ class TestProcessClaims:
         alice = None
         settings.DJWTO_ISS_CLAIM = 1
         request = rf.post('')
-        with pytest.raises(ValueError) as exec_info:
+        with pytest.raises(ImproperlyConfigured) as exec_info:
             _ = tokens.process_claims(alice, request)
         assert exec_info.value.args[0] == (
             'Value of Issuer must be str. Received int instead.'
@@ -42,7 +43,7 @@ class TestProcessClaims:
         settings.DJWTO_ISS_CLAIM = None
 
         settings.DJWTO_SUB_CLAIM = 1
-        with pytest.raises(ValueError) as exec_info:
+        with pytest.raises(ImproperlyConfigured) as exec_info:
             _ = tokens.process_claims(alice, request)
         assert exec_info.value.args[0] == (
             'Value of Subject must be str. Received int instead.'
@@ -50,14 +51,14 @@ class TestProcessClaims:
         settings.DJWTO_SUB_CLAIM = None
 
         settings.DJWTO_AUD_CLAIM = 1
-        with pytest.raises(ValueError) as exec_info:
+        with pytest.raises(ImproperlyConfigured) as exec_info:
             _ = tokens.process_claims(alice, request)
         assert exec_info.value.args[0] == (
             'Value of Audience must be either List[str] or str. Received int instead.'
         )
 
         settings.DJWTO_AUD_CLAIM = ['1', 1]
-        with pytest.raises(ValueError) as exec_info:
+        with pytest.raises(ImproperlyConfigured) as exec_info:
             _ = tokens.process_claims(alice, request)
         assert exec_info.value.args[0] == (
             'Value of Audience must be either List[str] or str. '
@@ -66,13 +67,13 @@ class TestProcessClaims:
         settings.DJWTO_AUD_CLAIM = None
 
         settings.DJWTO_REFRESH_TOKEN_LIFETIME = 1
-        with pytest.raises(ValueError) as exec_info:
+        with pytest.raises(ImproperlyConfigured) as exec_info:
             _ = tokens.process_claims(alice, request)
         assert exec_info.value.args[0] == (
             'Refresh token lifetime must be a `timedelta` object.'
         )
         settings.DJWTO_REFRESH_TOKEN_LIFETIME = timedelta(minutes=-1)
-        with pytest.raises(ValueError) as exec_info:
+        with pytest.raises(ImproperlyConfigured) as exec_info:
             _ = tokens.process_claims(alice, request)
         assert exec_info.value.args[0] == (
             'Refresh token expiration time must be positive.'
@@ -122,12 +123,18 @@ class TestGetAccessClaimsFromRefresh:
     def test_get_access_from_refresh_raises(self, settings):
         settings.DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(seconds=-1)
         settings.DJWTO_IAT_CLAIM = False
-        with pytest.raises(ValueError):
+        with pytest.raises(ImproperlyConfigured) as exec_info:
             _ = tokens.get_access_claims_from_refresh({})
+        assert exec_info.value.args[0] == (
+            'Refresh token expiration time must be positive.'
+        )
 
         settings.DJWTO_ACCESS_TOKEN_LIFETIME = 1
-        with pytest.raises(ValueError):
+        with pytest.raises(ImproperlyConfigured) as exec_info:
             _ = tokens.get_access_claims_from_refresh({})
+        assert exec_info.value.args[0] == (
+            'Refresh token lifetime must be a `timedelta` object.'
+        )
 
     def test_get_access_from_refresh(self, settings, monkeypatch, date_mock):
         claims = {'sub': 'sub'}

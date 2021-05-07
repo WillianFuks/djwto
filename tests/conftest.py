@@ -25,18 +25,16 @@ import pytest
 from datetime import datetime
 
 from django.contrib.auth.models import User
-
-# @pytest.fixture(scope='session')
-# def create_user(django_user_model):
-#     django_user_model.objects.create_user(username='alice', password='pass')
-
-
-@pytest.fixture(scope='session')
-def django_db_setup(django_db_setup, django_db_blocker):
-    with django_db_blocker.unblock():
-        User.objects.create_user(username='alice', password='pass')
+from djwto.models import JWTBlacklist
 
 
 @pytest.fixture(scope='session')
 def date_mock():
     return datetime(year=2021, month=1, day=1, hour=1, minute=1)
+
+
+@pytest.fixture(scope='session')
+def django_db_setup(django_db_setup, django_db_blocker, date_mock):
+    with django_db_blocker.unblock():
+        User.objects.create_user(username='alice', password='pass')
+        JWTBlacklist.objects.create(jti='1', token='abc.def.ghi', expires=date_mock)

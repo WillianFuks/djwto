@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
+import mock
 from calendar import timegm
 from datetime import datetime, timedelta
 
@@ -28,18 +28,18 @@ import jwt as pyjwt
 import pytest
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 
-from djwto.authenticate import JWTAuthentication, user_authenticate
+from djwto.authentication import JWTAuthentication, user_authenticate
 from djwto.exceptions import JWTValidationError
 
 
 @pytest.mark.django_db
-class TestAuthenticator:
+class TestUserAuthenticate:
     def test_user_authenticate(self, rf):
         request = rf.post('', {'username': 'alice', 'password': 'pass'})
         user = user_authenticate(request)
         assert user.username == 'alice'
 
-    def test_user_authenticator_invalid_data_raises(self, rf):
+    def test_user_authenticate_invalid_data_raises(self, rf):
         request = rf.post('', {'username': '', 'password': 'pass'})
         with pytest.raises(ValidationError) as exec_info:
             _ = user_authenticate(request)
@@ -76,49 +76,21 @@ class TestJWTAuthentication:
         with pytest.raises(JWTValidationError) as exec_info:
             _ = JWTAuthentication.get_raw_token_from_request(request)
         assert exec_info.value.args[0] == (
-            'Cookie "jwt_access" value is empty.'
+            'Cookie "jwt_access" cannot be empty.'
         )
 
         request.COOKIES['jwt_access'] = ''
         with pytest.raises(JWTValidationError) as exec_info:
             _ = JWTAuthentication.get_raw_token_from_request(request)
         assert exec_info.value.args[0] == (
-            'Cookie "jwt_access" value is empty.'
+            'Cookie "jwt_access" cannot be empty.'
         )
 
         settings.DJWTO_MODE = 'TWO-COOKIES'
         with pytest.raises(JWTValidationError) as exec_info:
             _ = JWTAuthentication.get_raw_token_from_request(request)
         assert exec_info.value.args[0] == (
-            'Signature cookie value cannot be empty.'
-        )
-
-        request.COOKIES['jwt_access_signature'] = 'ghi'
-        with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.get_raw_token_from_request(request)
-        assert exec_info.value.args[0] == (
-            'Access payload cannot be empty.'
-        )
-
-        request.COOKIES['jwt_access_payload'] = ''
-        with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.get_raw_token_from_request(request)
-        assert exec_info.value.args[0] == (
-            'Access payload cannot be empty.'
-        )
-
-        request.COOKIES['jwt_access_payload'] = '{}'
-        with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.get_raw_token_from_request(request)
-        assert exec_info.value.args[0] == (
-            'Invalid value of access payload token.'
-        )
-
-        request.COOKIES['jwt_access_payload'] = '{"abc}'
-        with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.get_raw_token_from_request(request)
-        assert exec_info.value.args[0] == (
-            'Invalid value of access payload token.'
+            'Cookie "jwt_access_token" cannot be empty.'
         )
 
         settings.DJWTO_MODE = 'invalid setting'
@@ -127,6 +99,15 @@ class TestJWTAuthentication:
         assert exec_info.value.args[0] == (
             'Value of `settings.DJWTO_MODE` is invalid. Expected either "JSON", '
             '"ONE-COOKIE" or "TWO-COOKIES". Received "invalid setting" instead.'
+        )
+
+        request = rf.post('', {'jwt_type': 'invalid type'})
+        settings.DJWTO_MODE = 'ONE-COOKIE'
+        with pytest.raises(JWTValidationError) as exec_info:
+            _ = JWTAuthentication.get_raw_token_from_request(request)
+        assert exec_info.value.args[0] == (
+            'Input data "jwt_type" must be either "access" or "refresh". Got '
+            '"invalid type" instead.'
         )
 
     def test_get_raw_token_from_request(self, rf, settings):
@@ -142,10 +123,17 @@ class TestJWTAuthentication:
         assert token == expected
 
         settings.DJWTO_MODE = 'TWO-COOKIES'
-        request.COOKIES['jwt_access_payload'] = (
-            f'{{"jwt": "{expected.rpartition(".")[0]}"}}'
-        )
-        request.COOKIES['jwt_access_signature'] = expected.rpartition('.')[-1]
+        request.COOKIES['jwt_access_token'] = expected
+        token = JWTAuthentication.get_raw_token_from_request(request)
+        assert token == expected
+
+        request = rf.post('', {'jwt_type': 'refresh'})
+        settings.DJWTO_MODE = 'ONE-COOKIE'
+        request.COOKIES['jwt_refresh'] = expected
+        token = JWTAuthentication.get_raw_token_from_request(request)
+        assert token == expected
+
+        settings.DJWTO_MODE = 'ONE-COOKIE'
         token = JWTAuthentication.get_raw_token_from_request(request)
         assert token == expected
 
@@ -294,3 +282,21 @@ class TestJWTAuthentication:
         token = pyjwt.encode(payload, sign_key, algorithm='RS256')
         result = JWTAuthentication.validate_token(token)
         assert result == payload
+
+    def test_authenticate(self, monkeypatch):
+        get_mock = mock.Mock()
+        get_mock.return_value = 'token'
+
+        val_mock = mock.Mock()
+        val_mock.return_value = 'validated'
+        monkeypatch.setattr(
+            'djwto.authentication.JWTAuthentication.get_raw_token_from_request',
+            get_mock)
+        monkeypatch.setattr('djwto.authentication.JWTAuthentication.validate_token',
+                            val_mock)
+
+        auther = JWTAuthentication()
+        result = auther.authenticate('request')
+        assert result == 'validated'
+        assert get_mock.called_once_with('request')
+        assert val_mock.called_once_with('token')

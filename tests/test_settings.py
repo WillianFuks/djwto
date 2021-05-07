@@ -43,11 +43,9 @@ DJWTO_ALGORITHM: str = 'HS256'
 DJWTO_MODE: Literal['JSON', 'ONE-COOKIE', 'TWO-COOKIES'] = 'JSON'
 DJWTO_REFRESH_COOKIE_PATH: Optional[str] = '/api/token/refresh'
 DJWTO_SAME_SITE: Optional[str] = 'Lax'
+DJWTO_CSRF: bool = True
 
 SECRET_KEY = 'key'
-INSTALLED_APPS = [
-    'tests',
-]
 
 DATABASES = {
     'default': {

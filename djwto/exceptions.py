@@ -23,3 +23,7 @@
 
 class JWTValidationError(Exception):
     pass
+
+
+class JWTBlacklistError(Exception):
+    pass
