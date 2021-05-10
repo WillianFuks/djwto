@@ -39,7 +39,6 @@ from django.utils.decorators import method_decorator
 import djwto.authentication as auth
 import djwto.models as models
 import djwto.tokens as tokens
-from djwto.exceptions import JWTBlacklistError, JWTValidationError
 
 
 HEADERS401 = {'WWW-Authenticate': auth.WWWAUTHENTICATE}
@@ -150,8 +149,8 @@ class GetTokensView(View):
           access_claims: Dict[str, Any]
               If `settings.DJWTO_MODE == 'TWO-COOKIES'` then it's expected the value of
               `access_claims` will be serialized in the cookie content. This allows for
-              the front-end to have access to its values. The signature of the cookie is
-              still separated and stored under `HttpOnly` and `Secure` conditions.
+              the front-end to have access to its values. The jwt token cookie is still
+              separated and stored under `HttpOnly` and `Secure` conditions.
 
         Returns
         -------
@@ -233,12 +232,18 @@ class BlackListTokenView(View):
     deleted accordingly as well.
     """
     @_build_decorator(csrf_protect)
+    @method_decorator(auth.jwt_login_required)
     def dispatch(
-        self, request: HttpRequest, *args: Any, **kwargs: Any
+        self, request: auth.THttpRequest, *args: Any, **kwargs: Any
     ) -> HttpResponse:
         return super().dispatch(request, *args, **kwargs)
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+    def post(
+        self,
+        request: auth.THttpRequest,
+        *args: Any,
+        **kwargs: Any
+    ) -> JsonResponse:
         if settings.DJWTO_REFRESH_COOKIE_PATH not in request.path:
             error_msg = (
                 'Only the refresh token can be blacklisted. The URL endpoint for '
@@ -259,13 +264,7 @@ class BlackListTokenView(View):
             error_msg = 'Field "jwt_type=refresh" must be sent in request.'
             return JsonResponse({'error': error_msg}, status=403)
 
-        try:
-            token = auth.JWTAuthentication.get_raw_token_from_request(request)
-            payload = auth.JWTAuthentication.validate_token(token)
-        except JWTValidationError as err:
-            return JsonResponse({'error': err.args[0]}, status=403)
-
-        jti = payload.get('jti')
+        jti = request.payload.get('jti')
         if not jti:
             error_msg = (
                 'No jti claim was available in the input token. The value is mandatory'
@@ -282,13 +281,13 @@ class BlackListTokenView(View):
             )
             return JsonResponse({'error': error_msg}, status=409)
 
-        exp = payload.get('exp')
+        exp = request.payload.get('exp')
         if exp:
             exp = datetime.utcfromtimestamp(exp)
 
         models.JWTBlacklist.objects.get_or_create(
             jti=jti,
-            token=token,
+            token=request.token,
             expires=exp
         )
         return self._build_response()

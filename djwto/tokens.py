@@ -22,15 +22,16 @@
 
 
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import uuid
 from calendar import timegm
-import jwt
+import jwt as pyjwt
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.contrib.auth.models import User
 from django.http import HttpRequest
+import djwto.exceptions as exceptions
 
 
 def process_claims(
@@ -128,9 +129,29 @@ def process_claims(
         claims['jti'] = jti
 
     if user:
-        claims['username'] = user.get_username()
-        claims['user_id'] = user.pk
+        claims['user'] = process_user(user)
     return claims
+
+
+def process_user(user: User) -> Dict[str, str]:
+    """
+    Process various data related to the database User object. This function can be
+    replaced in order to build a different claim set for the user.
+
+    Args
+    ----
+      user: User
+          Object user as retrieved from the database.
+
+    Returns
+    -------
+      Dict[str, str]
+          User claims to store in the token payload.
+    """
+    res = {}
+    res['username'] = user.get_username()
+    res['user_id'] = user.pk
+    return res
 
 
 def _validate_timedelta_claim(claim: Optional[timedelta]) -> None:
@@ -216,5 +237,65 @@ def encode_claims(claims: Dict[Any, Any]) -> str:
       str
           Final encoded JWT form.
     """
-    return jwt.encode(claims, settings.DJWTO_SIGNING_KEY,
-                      algorithm=settings.DJWTO_ALGORITHM)
+    return pyjwt.encode(claims, settings.DJWTO_SIGNING_KEY,
+                        algorithm=settings.DJWTO_ALGORITHM)
+
+
+def decode_token(token: str) -> Dict[str, Any]:
+    """
+    Validates if input token (in the form of 'abc.def.ghi') is a valid JWT token. The
+    token is considered valid if the HMAC of the payload is equal to the signature,
+    as well as the expiration time is still bigger than current date or the field
+    'nbf' is lower. If either 'exp' nor 'nbf' are available then skip those tests.
+
+    Arguments
+    ---------
+      token: str
+          JWT as extracted from request.
+
+    Returns
+    -------
+      Tuple[Dict[Any, Any]
+          If validated, returns the token payload in dict format.
+
+
+    Args
+    ----
+      token: str
+    """
+    sign_key = settings.DJWTO_SIGNING_KEY
+    ver_key = settings.DJWTO_VERIFYING_KEY
+    alg = [settings.DJWTO_ALGORITHM]
+    iss = settings.DJWTO_ISS_CLAIM
+    sub = settings.DJWTO_SUB_CLAIM
+    aud = settings.DJWTO_AUD_CLAIM
+    iat_flag = settings.DJWTO_IAT_CLAIM
+    jti_flag = settings.DJWTO_JTI_CLAIM
+
+    kwargs: Dict[str, Any] = {}
+    require: List[str] = []
+
+    def _update(name: str, value: Any) -> None:
+        if value:
+            kwargs[name] = value
+            require.append(name[:3])
+
+    _update('issuer', iss)
+    _update('subject', sub)
+    _update('audience', aud)
+    _update('iat', iat_flag)
+    _update('jti', jti_flag)
+
+    kwargs['options'] = {'require': require}
+
+    try:
+        payload = pyjwt.decode(token, ver_key if ver_key else sign_key, alg, **kwargs)
+        return payload
+    except (
+        pyjwt.ExpiredSignatureError,
+        pyjwt.ImmatureSignatureError,
+        pyjwt.MissingRequiredClaimError,
+        pyjwt.DecodeError,
+        pyjwt.InvalidTokenError
+    ) as err:
+        raise exceptions.JWTValidationError(str(err))
