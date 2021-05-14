@@ -38,4 +38,5 @@ def date_mock():
 def django_db_setup(django_db_setup, django_db_blocker, date_mock):
     with django_db_blocker.unblock():
         User.objects.create_user(username='alice', password='pass')
+        User.objects.create_user(username='bob', password='pass', is_active=False)
         JWTBlacklist.objects.create(jti='1', token='abc.def.ghi', expires=date_mock)

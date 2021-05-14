@@ -22,7 +22,7 @@
 
 
 import json
-from typing import Any, Dict, Callable
+from typing import Any, Dict, Callable, Tuple
 from functools import wraps
 
 from django.conf import settings
@@ -38,7 +38,8 @@ from djwto.exceptions import JWTValidationError
 
 class THttpRequest(HttpRequest):
     """
-    Helper class to workaround mypy not recognizing attribute `token` in `HttpRequest`.
+    Helper class to workaround mypy not recognizing attributes `token` and `payload`
+    in `HttpRequest`.
     """
     payload: Dict[str, Any]
     token: str
@@ -48,7 +49,7 @@ WWWAUTHENTICATE = 'Bearer realm=api'
 
 
 def jwt_passes_test(
-    test_func: Callable[[THttpRequest], bool]
+    test_func: Callable[[THttpRequest], Tuple[bool, str]]
 ) -> Callable:
     """
     Function based on the original Django's `user_passes_test` but adapted to work with
@@ -70,7 +71,10 @@ def jwt_passes_test(
         def _wrapped_view(
             request: THttpRequest, *args: Any, **kwargs: Any
         ) -> JsonResponse:
-            if test_func(request):
+            worked, error = test_func(request)
+            if error:
+                return JsonResponse({'error': error}, status=403)
+            if worked:
                 return view_func(request, *args, **kwargs)
             else:
                 return JsonResponse({'error': 'Failed to validate token.'}, status=403)
@@ -78,12 +82,17 @@ def jwt_passes_test(
     return decorator
 
 
-def jwt_login_required() -> Callable:
+def jwt_login_required(view_func: Callable) -> Callable:
     """
     Similar to the original Django's `login_required` but functioning on top of the jwt
     token as processed from the request. This function specifically enforces on views
     the requirement for the tokens been already created and validated in order for the
     dispatch to continue.
+
+    Args
+    ----
+      view_func: Callable
+          Refers to one of the verbs a view can have, such as `POST` or `GET`.
 
     Returns
     -------
@@ -91,16 +100,16 @@ def jwt_login_required() -> Callable:
           Decorator that returns function to process view if and only if the requried
           jwt tokens for authentication are available in the income `request` object.
     """
-    def test_func(request: THttpRequest) -> bool:
+    def test_func(request: THttpRequest) -> Tuple[bool, str]:
         try:
             token = get_raw_token_from_request(request)
             payload = tokens.decode_token(token)
-        except (JWTValidationError, ImproperlyConfigured):
-            False
-        request.payload = payload
-        request.token = token
-        return ('username' and 'user_id') in payload['user']
-    return jwt_passes_test(test_func)
+            request.payload = payload
+            request.token = token
+            return ('username' and 'user_id') in payload.get('user', {}), ''
+        except (JWTValidationError, ImproperlyConfigured) as err:
+            return False, str(err)
+    return jwt_passes_test(test_func)(view_func)
 
 
 def user_authenticate(request: HttpRequest) -> User:
@@ -129,12 +138,10 @@ def user_authenticate(request: HttpRequest) -> User:
     if form.errors:
         raise ValidationError(json.dumps(dict(form.errors)))
     user = form.get_user()
-    if not user.is_active:
-        raise ValidationError({'error': 'User is inactive.'})
     return user
 
 
-def jwt_authenticate(self, request: HttpRequest) -> Dict[str, Any]:
+def jwt_authenticate(request: HttpRequest) -> Dict[str, Any]:
     """
     Extract token expected to be sent in input `request` and assess its validity. If
     still valid, returns general information available in the payload. Notice that
@@ -156,7 +163,7 @@ def jwt_authenticate(self, request: HttpRequest) -> Dict[str, Any]:
     ------
       JWTValidationError: If input token is invalid.
     """
-    token = self.get_raw_token_from_request(request)
+    token = get_raw_token_from_request(request)
     validated_token = tokens.decode_token(token)
     return validated_token
 
@@ -210,18 +217,31 @@ def get_raw_token_from_request(request: HttpRequest) -> str:
                 'Value in HTTP_AUTHORIZATION header is not valid.'
             )
         return token
+
     # Defaults to 'access' to make it easier on the front-end calls
     type_ = request.POST.get('jwt_type', 'access')
+
     if type_ not in {'access', 'refresh'}:
         raise JWTValidationError(
             'Input data "jwt_type" must be either "access" or "refresh".'
             f' Got "{type_}" instead.'
         )
+
     if settings.DJWTO_MODE == 'ONE-COOKIE' or type_ == 'refresh':
         token = request.COOKIES.get(f'jwt_{type_}', '')
         if not token:
-            raise JWTValidationError('Cookie "jwt_access" cannot be empty.')
+            if (
+                type_ == 'refresh' and
+                settings.DJWTO_REFRESH_COOKIE_PATH not in request.path
+            ):
+                raise JWTValidationError(
+                    'Refresh cookie is only sent in path '
+                    f'"{settings.DJWTO_REFRESH_COOKIE_PATH}". Requested path was: '
+                    f'{request.path}.'
+                )
+            raise JWTValidationError(f'Cookie "jwt_{type_}" cannot be empty.')
         return token
+
     # If it made until here then only option is to retrieve access token
     if settings.DJWTO_MODE == 'TWO-COOKIES':
         token = request.COOKIES.get('jwt_access_token')

@@ -148,10 +148,10 @@ def process_user(user: User) -> Dict[str, str]:
       Dict[str, str]
           User claims to store in the token payload.
     """
-    res = {}
-    res['username'] = user.get_username()
-    res['user_id'] = user.pk
-    return res
+    return {
+        'username': user.get_username(),
+        'user_id': user.pk
+    }
 
 
 def _validate_timedelta_claim(claim: Optional[timedelta]) -> None:

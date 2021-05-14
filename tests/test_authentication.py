@@ -27,75 +27,224 @@ from datetime import datetime, timedelta
 import jwt as pyjwt
 import pytest
 from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.views import View
+from django.http.response import JsonResponse
+from django.utils.decorators import method_decorator
 
-from djwto.authentication import JWTAuthentication, user_authenticate
+import djwto.authentication as auth
 from djwto.exceptions import JWTValidationError
+
+
+class MockJWTLoginView(View):
+    @method_decorator(auth.jwt_login_required)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        assert request.token is not None
+        assert request.payload is not None
+        assert 'user' in request.payload
+        return JsonResponse({'msg': 'worked'})
+
+
+class TestJWTLoginRequired:
+    sign_key = 'test'
+
+    def test_post_fails_with_login_required(self, rf, settings):
+        request = rf.post('/api/tokens')
+        response = MockJWTLoginView.as_view()(request)
+        assert response.content == (
+            b'{"error": "Token not found in \\"HTTP_AUTHORIZATION\\" header."}'
+        )
+
+        settings.DJWTO_MODE = 'ONE-COOKIE'
+        response = MockJWTLoginView.as_view()(request)
+        assert response.content == (
+            b'{"error": "Cookie \\"jwt_access\\" cannot be empty."}'
+        )
+
+        # Tests refresh type with invalid URL path
+        request = rf.post('/invalid_path', {'jwt_type': 'refresh'})
+        response = MockJWTLoginView.as_view()(request)
+        assert response.content == (
+            b'{"error": "Refresh cookie is only sent in path \\"/api/token/refresh\\". '
+            b'Requested path was: /invalid_path."}'
+        )
+
+        # Valid URL Path with empty refresh token
+        request = rf.post('/api/token/refresh', {'jwt_type': 'refresh'})
+        response = MockJWTLoginView.as_view()(request)
+        assert response.content == (
+            b'{"error": "Cookie \\"jwt_refresh\\" cannot be empty."}'
+        )
+
+        # Access Token
+        settings.DJWTO_MODE = 'TWO-COOKIES'
+        request = rf.post('/api/token/refresh')
+        response = MockJWTLoginView.as_view()(request)
+        assert response.content == (
+            b'{"error": "Cookie \\"jwt_access_token\\" cannot be empty."}'
+        )
+
+        # Refresh Token Invalid URL Path
+        settings.DJWTO_MODE = 'TWO-COOKIES'
+        request = rf.post('/invalid_path', {'jwt_type': 'refresh'})
+        response = MockJWTLoginView.as_view()(request)
+        assert response.content == (
+            b'{"error": "Refresh cookie is only sent in path \\"/api/token/refresh\\". '
+            b'Requested path was: /invalid_path."}'
+        )
+
+        # Valid URL Path with empty refresh token
+        settings.DJWTO_MODE = 'TWO-COOKIES'
+        request = rf.post('/api/token/refresh', {'jwt_type': 'refresh'})
+        response = MockJWTLoginView.as_view()(request)
+        assert response.content == (
+            b'{"error": "Cookie \\"jwt_refresh\\" cannot be empty."}'
+        )
+
+    def test_post_with_login_required(self, rf, settings):
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+
+        request = rf.post('/api/tokens')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        response = MockJWTLoginView.as_view()(request)
+        assert response.content == (
+            b'{"error": "Failed to validate token."}'
+        )
+
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'user_id': 1}}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        request = rf.post('/api/tokens')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        response = MockJWTLoginView.as_view()(request)
+        assert response.content == (
+            b'{"msg": "worked"}'
+        )
+
+        settings.DJWTO_MODE = 'ONE-COOKIE'
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_refresh'] = 'foo'
+        rf.cookies['jwt_access'] = expected_jwt
+        request = rf.post('/api/tokens')
+        response = MockJWTLoginView.as_view()(request)
+        assert response.content == (
+            b'{"error": "Failed to validate token."}'
+        )
+
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'user_id': 1}}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_refresh'] = 'foo'
+        rf.cookies['jwt_access'] = expected_jwt
+        request = rf.post('/api/tokens')
+        response = MockJWTLoginView.as_view()(request)
+        assert response.content == (
+            b'{"msg": "worked"}'
+        )
+
+        settings.DJWTO_MODE = 'TWO-COOKIES'
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_refresh'] = 'foo'
+        rf.cookies['jwt_access_payload'] = expected_payload
+        rf.cookies['jwt_access_token'] = expected_jwt
+        request = rf.post('/api/tokens')
+        response = MockJWTLoginView.as_view()(request)
+        print(response.content)
+        assert response.content == (
+            b'{"error": "Failed to validate token."}'
+        )
+
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'user_id': 1}}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_refresh'] = 'foo'
+        rf.cookies['jwt_access_payload'] = expected_payload
+        rf.cookies['jwt_access_token'] = expected_jwt
+        request = rf.post('/api/tokens')
+        response = MockJWTLoginView.as_view()(request)
+        assert response.content == (
+            b'{"msg": "worked"}'
+        )
 
 
 @pytest.mark.django_db
 class TestUserAuthenticate:
     def test_user_authenticate(self, rf):
         request = rf.post('', {'username': 'alice', 'password': 'pass'})
-        user = user_authenticate(request)
+        user = auth.user_authenticate(request)
         assert user.username == 'alice'
 
     def test_user_authenticate_invalid_data_raises(self, rf):
         request = rf.post('', {'username': '', 'password': 'pass'})
         with pytest.raises(ValidationError) as exec_info:
-            _ = user_authenticate(request)
+            _ = auth.user_authenticate(request)
         assert exec_info.value.args[0] == (
             '{"username": ["This field is required."]}'
         )
 
         request = rf.post('', {'username': 'alice', 'password': 'wrong pass'})
         with pytest.raises(ValidationError) as exec_info:
-            _ = user_authenticate(request)
+            _ = auth.user_authenticate(request)
         assert exec_info.value.args[0] == (
             '{"__all__": ["Please enter a correct username and password. Note that both '
             'fields may be case-sensitive."]}'
         )
 
 
-class TestJWTAuthentication:
+class TestGetRawTokenFromRequest:
     def test_get_raw_token_from_request_raises(self, rf, settings):
         request = rf.post('')
         with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.get_raw_token_from_request(request)
+            _ = auth.get_raw_token_from_request(request)
         assert exec_info.value.args[0] == (
             'Token not found in "HTTP_AUTHORIZATION" header.'
         )
 
         request.META['HTTP_AUTHORIZATION'] = 'Authorization: Bearer '
         with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.get_raw_token_from_request(request)
+            _ = auth.get_raw_token_from_request(request)
         assert exec_info.value.args[0] == (
             'Value in HTTP_AUTHORIZATION header is not valid.'
         )
 
         settings.DJWTO_MODE = 'ONE-COOKIE'
         with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.get_raw_token_from_request(request)
+            _ = auth.get_raw_token_from_request(request)
         assert exec_info.value.args[0] == (
             'Cookie "jwt_access" cannot be empty.'
         )
 
         request.COOKIES['jwt_access'] = ''
         with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.get_raw_token_from_request(request)
+            _ = auth.get_raw_token_from_request(request)
         assert exec_info.value.args[0] == (
             'Cookie "jwt_access" cannot be empty.'
         )
 
         settings.DJWTO_MODE = 'TWO-COOKIES'
         with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.get_raw_token_from_request(request)
+            _ = auth.get_raw_token_from_request(request)
         assert exec_info.value.args[0] == (
             'Cookie "jwt_access_token" cannot be empty.'
         )
 
         settings.DJWTO_MODE = 'invalid setting'
         with pytest.raises(ImproperlyConfigured) as exec_info:
-            _ = JWTAuthentication.get_raw_token_from_request(request)
+            _ = auth.get_raw_token_from_request(request)
         assert exec_info.value.args[0] == (
             'Value of `settings.DJWTO_MODE` is invalid. Expected either "JSON", '
             '"ONE-COOKIE" or "TWO-COOKIES". Received "invalid setting" instead.'
@@ -104,199 +253,61 @@ class TestJWTAuthentication:
         request = rf.post('', {'jwt_type': 'invalid type'})
         settings.DJWTO_MODE = 'ONE-COOKIE'
         with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.get_raw_token_from_request(request)
+            _ = auth.get_raw_token_from_request(request)
         assert exec_info.value.args[0] == (
             'Input data "jwt_type" must be either "access" or "refresh". Got '
             '"invalid type" instead.'
+        )
+
+        settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
+        settings.DJWTO_MODE = 'TWO-COOKIES'
+        request = rf.post('', {'jwt_type': 'refresh'})
+        with pytest.raises(JWTValidationError) as exec_info:
+            _ = auth.get_raw_token_from_request(request)
+        assert exec_info.value.args[0] == (
+            'Refresh cookie is only sent in path "/api/tokens/refresh". '
+            'Requested path was: /.'
         )
 
     def test_get_raw_token_from_request(self, rf, settings):
         request = rf.post('')
         expected = 'abc.def.ghi'
         request.META['HTTP_AUTHORIZATION'] = 'Authorization: Bearer abc.def.ghi'
-        token = JWTAuthentication.get_raw_token_from_request(request)
+        token = auth.get_raw_token_from_request(request)
         assert token == expected
 
         settings.DJWTO_MODE = 'ONE-COOKIE'
         request.COOKIES['jwt_access'] = expected
-        token = JWTAuthentication.get_raw_token_from_request(request)
+        token = auth.get_raw_token_from_request(request)
         assert token == expected
 
         settings.DJWTO_MODE = 'TWO-COOKIES'
         request.COOKIES['jwt_access_token'] = expected
-        token = JWTAuthentication.get_raw_token_from_request(request)
+        token = auth.get_raw_token_from_request(request)
         assert token == expected
 
         request = rf.post('', {'jwt_type': 'refresh'})
         settings.DJWTO_MODE = 'ONE-COOKIE'
         request.COOKIES['jwt_refresh'] = expected
-        token = JWTAuthentication.get_raw_token_from_request(request)
+        token = auth.get_raw_token_from_request(request)
         assert token == expected
 
         settings.DJWTO_MODE = 'ONE-COOKIE'
-        token = JWTAuthentication.get_raw_token_from_request(request)
+        token = auth.get_raw_token_from_request(request)
         assert token == expected
 
-    def test_validate_token_raises(self, settings):
-        sign_key = 'sign key'
-        settings.DJWTO_SIGNING_KEY = sign_key
-        settings.DJWTO_VERIFYING_KEY = None
-        settings.DJWTO_ALGORITHM = 'HS256'
-        settings.DJWTO_ISS_CLAIM = None
-        settings.DJWTO_SUB_CLAIM = None
-        settings.DJWTO_AUD_CLAIM = None
-        settings.DJWTO_IAT_CLAIM = False
-        settings.DJWTO_JTI_CLAIM = False
 
-        payload = {'exp': datetime(2021, 1, 1)}
-        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
-        with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.validate_token(token)
-        assert exec_info.value.args[0] == 'Signature has expired'
-
-        token = 'abc.def.ghi'
-        with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.validate_token(token)
-        assert exec_info.value.args[0] == (
-            "Invalid header string: 'utf-8' codec can't "
-            "decode byte 0xb7 in position 1: invalid start byte"
-        )
-
-        payload = {'nbf': datetime.now() + timedelta(days=1)}
-        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
-        with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.validate_token(token)
-        assert exec_info.value.args[0] == 'The token is not yet valid (nbf)'
-
-        settings.DJWTO_ISS_CLAIM = 'iss'
-        payload = {}
-        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
-        with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.validate_token(token)
-        assert exec_info.value.args[0] == 'Token is missing the "iss" claim'
-
-        settings.DJWTO_ISS_CLAIM = 'iss'
-        settings.DJWTO_SUB_CLAIM = 'sub'
-        payload = {'iss': 'iss'}
-        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
-        with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.validate_token(token)
-        assert exec_info.value.args[0] == 'Token is missing the "sub" claim'
-
-        settings.DJWTO_ISS_CLAIM = 'iss'
-        settings.DJWTO_SUB_CLAIM = 'sub'
-        settings.DJWTO_AUD_CLAIM = 'aud'
-        payload = {'iss': 'iss', 'sub': 'sub'}
-        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
-        with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.validate_token(token)
-        assert exec_info.value.args[0] == 'Token is missing the "aud" claim'
-
-        settings.DJWTO_ISS_CLAIM = 'iss'
-        settings.DJWTO_SUB_CLAIM = 'sub'
-        settings.DJWTO_AUD_CLAIM = 'aud'
-        settings.DJWTO_IAT_CLAIM = True
-        payload = {'iss': 'iss', 'sub': 'sub', 'aud': 'aud'}
-        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
-        with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.validate_token(token)
-        assert exec_info.value.args[0] == 'Token is missing the "iat" claim'
-
-        settings.DJWTO_ISS_CLAIM = 'iss'
-        settings.DJWTO_SUB_CLAIM = 'sub'
-        settings.DJWTO_AUD_CLAIM = 'aud'
-        settings.DJWTO_IAT_CLAIM = True
-        settings.DJWTO_JTI_CLAIM = True
-        payload = {'iss': 'iss', 'sub': 'sub', 'aud': 'aud', 'iat': datetime.now()}
-        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
-        with pytest.raises(JWTValidationError) as exec_info:
-            _ = JWTAuthentication.validate_token(token)
-        assert exec_info.value.args[0] == 'Token is missing the "jti" claim'
-
-    def test_validate_token(self, settings):
-        sign_key = 'sign key'
-        settings.DJWTO_SIGNING_KEY = sign_key
-        settings.DJWTO_VERIFYING_KEY = None
-        settings.DJWTO_ALGORITHM = 'HS256'
-        settings.DJWTO_ISS_CLAIM = None
-        settings.DJWTO_SUB_CLAIM = None
-        settings.DJWTO_AUD_CLAIM = None
-        settings.DJWTO_IAT_CLAIM = False
-        settings.DJWTO_JTI_CLAIM = False
-
-        exp = datetime.now() + timedelta(days=1)
-        payload = {'exp': timegm(exp.utctimetuple())}
-        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
-        result = JWTAuthentication.validate_token(token)
-        assert result == payload
-
-        sign_key = 'sign key'
-        settings.DJWTO_SIGNING_KEY = sign_key
-        settings.DJWTO_VERIFYING_KEY = None
-        settings.DJWTO_ALGORITHM = 'HS256'
-        settings.DJWTO_ISS_CLAIM = 'iss'
-        settings.DJWTO_SUB_CLAIM = 'sub'
-        settings.DJWTO_AUD_CLAIM = 'aud'
-        settings.DJWTO_IAT_CLAIM = True
-        settings.DJWTO_JTI_CLAIM = True
-
-        exp = datetime.now() + timedelta(days=1)
-        payload = {'exp': timegm(exp.utctimetuple()), 'iss': 'iss', 'sub': 'sub',
-                   'aud': 'aud', 'iat': True, 'jti': True}
-        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
-        result = JWTAuthentication.validate_token(token)
-        assert result == payload
-
-        sign_key = 'sign key'
-        settings.DJWTO_SIGNING_KEY = sign_key
-        settings.DJWTO_VERIFYING_KEY = None
-        settings.DJWTO_ALGORITHM = 'HS256'
-        settings.DJWTO_ISS_CLAIM = 'iss'
-        settings.DJWTO_SUB_CLAIM = 'sub'
-        settings.DJWTO_AUD_CLAIM = ['aud0', 'aud1']
-        settings.DJWTO_IAT_CLAIM = True
-        settings.DJWTO_JTI_CLAIM = True
-
-        exp = datetime.now() + timedelta(days=1)
-        payload = {'exp': timegm(exp.utctimetuple()), 'iss': 'iss', 'sub': 'sub',
-                   'aud': ['aud0', 'aud1'], 'iat': True, 'jti': True}
-        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
-        result = JWTAuthentication.validate_token(token)
-        assert result == payload
-
-        sign_key = open('tests/fixtures/keys/jwtRS256.key', 'rb').read()
-        settings.DJWTO_SIGNING_KEY = sign_key
-        settings.DJWTO_VERIFYING_KEY = (
-            open('tests/fixtures/keys/jwtRS256.key.pub', 'rb').read()
-        )
-        settings.DJWTO_ALGORITHM = 'RS256'
-        settings.DJWTO_ISS_CLAIM = 'iss'
-        settings.DJWTO_SUB_CLAIM = 'sub'
-        settings.DJWTO_AUD_CLAIM = 'aud'
-        settings.DJWTO_IAT_CLAIM = True
-        settings.DJWTO_JTI_CLAIM = True
-
-        exp = datetime.now() + timedelta(days=1)
-        payload = {'exp': timegm(exp.utctimetuple()), 'iss': 'iss', 'sub': 'sub',
-                   'aud': 'aud', 'iat': True, 'jti': True}
-        token = pyjwt.encode(payload, sign_key, algorithm='RS256')
-        result = JWTAuthentication.validate_token(token)
-        assert result == payload
-
-    def test_authenticate(self, monkeypatch):
+class TestJWTAuthenticate:
+    def test_jwt_authenticate(self, monkeypatch):
         get_mock = mock.Mock()
         get_mock.return_value = 'token'
 
-        val_mock = mock.Mock()
-        val_mock.return_value = 'validated'
-        monkeypatch.setattr(
-            'djwto.authentication.JWTAuthentication.get_raw_token_from_request',
-            get_mock)
-        monkeypatch.setattr('djwto.authentication.JWTAuthentication.validate_token',
-                            val_mock)
+        decode_mock = mock.Mock()
+        decode_mock.return_value = 'validated'
+        monkeypatch.setattr('djwto.authentication.get_raw_token_from_request', get_mock)
+        monkeypatch.setattr('djwto.authentication.tokens.decode_token', decode_mock)
 
-        auther = JWTAuthentication()
-        result = auther.authenticate('request')
+        result = auth.jwt_authenticate('request')
         assert result == 'validated'
         assert get_mock.called_once_with('request')
-        assert val_mock.called_once_with('token')
+        assert decode_mock.called_once_with('token')

@@ -40,10 +40,12 @@ from django.middleware.csrf import get_token
 class TestGetTokensView:
     CTPL = ('Set-Cookie: {name}={value}; expires={expires}; {http_only}'
             'Max-Age={max_age}; Path={path}; SameSite={samesite}; {secure}')
+
     VTPL = (
         '"{{\\"exp\\": \\"{exp}\\"\\054 \\"iat\\": \\"{iat}\\"\\054 \\"jti\\": '
         '\\"uuid\\"\\054 \\"nbf\\": \\"{nbf}\\"\\054 \\"refresh_iat\\": {refresh_iat}'
-        '\\054 \\"user_id\\": 1\\054 \\"username\\": \\"alice\\"}}"'
+        '\\054 \\"user\\": {{\\"user_id\\": {user_id}\\054 \\"username\\": '
+        '\\"{username}\\"}}}}"'
     )
     # Test JSON mode creates the token as expected
     date_ = datetime(2021, 1, 1)
@@ -64,8 +66,10 @@ class TestGetTokensView:
         'exp': date_ + access_lifetime,
         'nbf': date_ + nbf_lifetime,
         'jti': 'uuid',
-        'username': 'alice',
-        'user_id': 1,
+        'user': {
+            'username': 'alice',
+            'user_id': 1,
+        },
         'refresh_iat': timegm(date_.utctimetuple())
     }
     expected_access_jwt = pyjwt.encode(expected_access_claims, sign_key)
@@ -75,8 +79,10 @@ class TestGetTokensView:
         'exp': date_ + refresh_lifetime,
         'nbf': date_ + nbf_lifetime,
         'jti': 'uuid',
-        'username': 'alice',
-        'user_id': 1
+        'user': {
+            'username': 'alice',
+            'user_id': 1
+        }
     }
     expected_refresh_jwt = pyjwt.encode(expected_refresh_claims, sign_key)
 
@@ -208,7 +214,20 @@ class TestGetTokensView:
             f'"access": "{self.expected_access_jwt}"}}'
         ).encode()
 
-    def test_post_one_cookie_mode_with_csrf(self, rf, settings, monkeypatch):
+        # Tests scenario where JWT is available in request. This case should return
+        # a 200 status code with no changes in the backend
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JIT_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        request = rf.post('/api/tokens')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        response = GetTokensView.as_view()(request)
+        assert response.content == b'{"msg": "User already authenticated."}'
+
+    def test_post_one_cookie_mode_ensuring_csrf(self, rf, settings, monkeypatch):
         settings.DJWTO_MODE = 'ONE-COOKIE'
         settings.DJWTO_CSRF = True
         reload(views)
@@ -255,7 +274,20 @@ class TestGetTokensView:
             secure='Secure'
         )
 
-    def test_post_one_cookie_mode_without_csrf(self, rf, settings, monkeypatch):
+        # Tests scenario where JWT are available in request. This case should return
+        # a 200 status code with no changes in the backend
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JIT_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_access'] = expected_jwt
+        request = rf.post('/api/token')
+        response = GetTokensView.as_view()(request)
+        assert response.content == b'{"msg": "User already authenticated."}'
+
+    def test_post_one_cookie_mode_not_ensuring_csrf(self, rf, settings, monkeypatch):
         settings.DJWTO_MODE = 'ONE-COOKIE'
         settings.DJWTO_CSRF = False
         reload(views)
@@ -302,7 +334,20 @@ class TestGetTokensView:
             secure='Secure'
         )
 
-    def test_post_two_cookies_mode_with_csrf(self, rf, settings, monkeypatch):
+        # Tests scenario where JWT are available in request. This case should return
+        # a 200 status code with no changes in the backend
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JIT_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_access'] = expected_jwt
+        request = rf.post('/api/token')
+        response = GetTokensView.as_view()(request)
+        assert response.content == b'{"msg": "User already authenticated."}'
+
+    def test_post_two_cookies_mode_ensuring_csrf(self, rf, settings, monkeypatch):
         settings.DJWTO_MODE = 'TWO-COOKIES'
         settings.DJWTO_CSRF = True
         reload(views)
@@ -341,7 +386,9 @@ class TestGetTokensView:
             exp=(self.date_ + self.access_lifetime).strftime("%Y-%m-%dT%H:%M:%S"),
             iat=self.date_.strftime("%Y-%m-%dT%H:%M:%S"),
             nbf=(self.date_ + self.nbf_lifetime).strftime("%Y-%m-%dT%H:%M:%S"),
-            refresh_iat=timegm(self.date_.utctimetuple())
+            refresh_iat=timegm(self.date_.utctimetuple()),
+            user_id=1,
+            username='alice'
         )
 
         access_payload = cookies['jwt_access_payload']
@@ -370,7 +417,20 @@ class TestGetTokensView:
             secure='Secure'
         )
 
-    def test_post_two_cookies_mode_without_csrf(self, rf, settings, monkeypatch):
+        # Tests scenario where JWT are available in request. This case should return
+        # a 200 status code with no changes in the backend
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JIT_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_access_token'] = expected_jwt
+        request = rf.post('/api/token')
+        response = GetTokensView.as_view()(request)
+        assert response.content == b'{"msg": "User already authenticated."}'
+
+    def test_post_two_cookies_mode_not_ensuring_csrf(self, rf, settings, monkeypatch):
         settings.DJWTO_MODE = 'TWO-COOKIES'
         settings.DJWTO_CSRF = False
         reload(views)
@@ -409,7 +469,9 @@ class TestGetTokensView:
             exp=(self.date_ + self.access_lifetime).strftime("%Y-%m-%dT%H:%M:%S"),
             iat=self.date_.strftime("%Y-%m-%dT%H:%M:%S"),
             nbf=(self.date_ + self.nbf_lifetime).strftime("%Y-%m-%dT%H:%M:%S"),
-            refresh_iat=timegm(self.date_.utctimetuple())
+            refresh_iat=timegm(self.date_.utctimetuple()),
+            user_id=1,
+            username='alice'
         )
 
         access_payload = cookies['jwt_access_payload']
@@ -438,6 +500,19 @@ class TestGetTokensView:
             samesite=settings.DJWTO_SAME_SITE,
             secure='Secure'
         )
+
+        # Tests scenario where JWT are available in request. This case should return
+        # a 200 status code with no changes in the backend
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JIT_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_access_token'] = expected_jwt
+        request = rf.post('/api/token')
+        response = GetTokensView.as_view()(request)
+        assert response.content == b'{"msg": "User already authenticated."}'
 
 
 @pytest.mark.django_db
@@ -445,7 +520,6 @@ class TestBlacklistTokensView:
     sign_key = 'test'
 
     def test_post_returns_error_response(self, rf, settings, monkeypatch):
-        settings.DJWTO_CSRF = True
         reload(views)
         from djwto.views import BlackListTokenView
         # Blacklist endpoint defined in a URL that does not contain the path of the
@@ -455,75 +529,52 @@ class TestBlacklistTokensView:
         request = rf.post('/api/tokens')
         response = BlackListTokenView.as_view()(request)
         assert response.content == (
+            b'{"error": "Token not found in \\"HTTP_AUTHORIZATION\\" header."}'
+        )
+
+        # Simulates user logged-in
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'user_id': 1}}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+
+        request = rf.post('/api/tokens')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        response = BlackListTokenView.as_view()(request)
+        assert response.content == (
             b'{"error": "Only the refresh token can be blacklisted. The URL endpoint for'
             b' blacklisting must contain the value set in '
             b'`settings.DJWTO_REFRESH_COOKIE_PATH`."}'
         )
         assert response.status_code == 403
 
-        # If settings do not define JTI claim then the Blacklist API cannot be used
-        settings.DJWTO_JTI_CLAIM = False
-        request = rf.post('/api/tokens/refresh')
-        response = BlackListTokenView.as_view()(request)
-        assert response.content == (
-            b'{"error": "Value of `settings.DJWTO_JTI_CLAIM` must be `True` in order to '
-            b'use Blacklist."}'
-        )
-        assert response.status_code == 403
-
-        # Input POST request must contain a data field such as "-d jwt_type=refresh"
-        settings.DJWTO_JTI_CLAIM = True
-        request = rf.post('/api/tokens/refresh', {'jwt_type': ''})
-        response = BlackListTokenView.as_view()(request)
-        assert response.content == (
-            b'{"error": "Field \\"jwt_type=refresh\\" must be sent in request."}'
-        )
-        assert response.status_code == 403
-
         request = rf.post('/api/tokens/refresh', {'jwt_type': 'access'})
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = BlackListTokenView.as_view()(request)
         assert response.content == (
             b'{"error": "Field \\"jwt_type=refresh\\" must be sent in request."}'
-        )
-        assert response.status_code == 403
-
-        # If a JWT validation error occurs no token can be blacklisted. This ensures
-        # authenticity of the income request
-        get_mock = mock.Mock(side_effect=JWTValidationError('test msg'))
-        monkeypatch.setattr(
-            'djwto.views.auth.JWTAuthentication.get_raw_token_from_request', get_mock)
-        request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
-        response = BlackListTokenView.as_view()(request)
-        assert response.content == (
-            b'{"error": "test msg"}'
         )
         assert response.status_code == 403
 
         # If input token doesn't have JTI claim then it fails to blacklist
-        get_mock = mock.Mock(return_value='token')
-        val_mock = mock.Mock(return_value={})
-        monkeypatch.setattr(
-            'djwto.views.auth.JWTAuthentication.get_raw_token_from_request', get_mock)
-        monkeypatch.setattr(
-            'djwto.views.auth.JWTAuthentication.validate_token', val_mock)
-
         request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = BlackListTokenView.as_view()(request)
+        print(response.content)
         assert response.content == (
             b'{"error": "No jti claim was available in the input token. The value is '
-            b'mandatoryin order to use the Blacklist api."}'
+            b'mandatory in order to use the Blacklist API."}'
         )
         assert response.status_code == 403
 
         # Tokens that have already been blacklisted cannot be blacklisted again
-        get_mock = mock.Mock(return_value='token')
-        val_mock = mock.Mock(return_value={'jti': '1'})
-        monkeypatch.setattr(
-            'djwto.views.auth.JWTAuthentication.get_raw_token_from_request', get_mock)
-        monkeypatch.setattr(
-            'djwto.views.auth.JWTAuthentication.validate_token', val_mock)
-
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'user_id': 1},
+                            'jti': '1'}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
         request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = BlackListTokenView.as_view()(request)
         assert response.content == (
             b'{"error": "Input jti token is already blacklisted."}'
@@ -551,7 +602,8 @@ class TestBlacklistTokensView:
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_SIGNING_KEY = self.sign_key
         exp = datetime.now() + timedelta(days=1)
-        expected_payload = {'jti': '2', 'exp': exp}
+        expected_payload = {'jti': '2', 'exp': exp, 'user': {'username': 'alice',
+                            'user_id': 1}}
         expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
         request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
@@ -567,6 +619,25 @@ class TestBlacklistTokensView:
         exp_str = exp.strftime("%Y-%m-%d %H:%M:%S")
         assert obj.expires.strftime("%Y-%m-%d %H:%M:%S") == exp_str
 
+    def test_delete_json_mode_with_csrf(self, rf, settings, monkeypatch):
+        settings.DJWTO_MODE = 'JSON'
+        settings.DJWTO_CSRF = True
+        reload(views)
+        from djwto.views import BlackListTokenView
+
+        settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        expected_payload = {'user': {'username': 'alice', 'user_id': 1}}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        request = rf.delete('/api/tokens/refresh')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        response = BlackListTokenView.as_view()(request)
+        assert response.content == (
+            b'{"message": "No token to delete."}'
+        )
+
     def test_post_json_mode_without_csrf(self, rf, settings, monkeypatch):
         settings.DJWTO_MODE = 'JSON'
         settings.DJWTO_CSRF = False
@@ -577,7 +648,8 @@ class TestBlacklistTokensView:
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_SIGNING_KEY = self.sign_key
         exp = datetime.now() + timedelta(days=1)
-        expected_payload = {'jti': '2', 'exp': exp}
+        expected_payload = {'jti': '2', 'exp': exp, 'user': {'username': 'alice',
+                            'user_id': 1}}
         expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
         request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
@@ -602,7 +674,7 @@ class TestBlacklistTokensView:
         settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_SIGNING_KEY = self.sign_key
-        expected_payload = {'jti': '3'}
+        expected_payload = {'jti': '3', 'user': {'username': 'alice', 'user_id': 1}}
         expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
         rf.cookies['jwt_refresh'] = expected_jwt
         rf.cookies['jwt_access'] = 'value access'
@@ -620,6 +692,30 @@ class TestBlacklistTokensView:
         assert obj.jti == '3'
         assert obj.token == expected_jwt
         assert obj.expires is None
+
+    def test_delete_one_cookie_mode_with_csrf(self, rf, settings, monkeypatch):
+        settings.DJWTO_MODE = 'ONE-COOKIE'
+        settings.DJWTO_CSRF = True
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        reload(views)
+        from djwto.views import BlackListTokenView
+
+        settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        expected_payload = {'user': {'username': 'alice', 'user_id': 1}}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_refresh'] = expected_jwt
+        rf.cookies['jwt_access'] = expected_jwt
+        request = rf.delete('/api/tokens')
+        csrf_token = get_token(request)
+        request.COOKIES['csrftoken'] = csrf_token
+        request.META['HTTP_X_CSRFTOKEN'] = csrf_token
+        response = BlackListTokenView.as_view()(request)
+        assert response.content == (
+            b'{"message": "Tokens successfully deleted."}'
+        )
         assert 'Max-Age=0' in str(response.cookies['jwt_refresh'])
         assert 'Max-Age=0' in str(response.cookies['jwt_access'])
 
@@ -632,7 +728,7 @@ class TestBlacklistTokensView:
         settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_SIGNING_KEY = self.sign_key
-        expected_payload = {'jti': '3'}
+        expected_payload = {'jti': '3', 'user': {'username': 'alice', 'user_id': 1}}
         expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
         rf.cookies['jwt_refresh'] = expected_jwt
         rf.cookies['jwt_access'] = 'value access'
@@ -647,8 +743,8 @@ class TestBlacklistTokensView:
         assert obj.jti == '3'
         assert obj.token == expected_jwt
         assert obj.expires is None
-        assert 'Max-Age=0' in str(response.cookies['jwt_refresh'])
-        assert 'Max-Age=0' in str(response.cookies['jwt_access'])
+        # assert 'Max-Age=0' in str(response.cookies['jwt_refresh'])
+        # assert 'Max-Age=0' in str(response.cookies['jwt_access'])
 
     def test_post_two_cookies_mode_with_csrf(self, rf, settings, monkeypatch):
         settings.DJWTO_MODE = 'TWO-COOKIES'
@@ -659,15 +755,11 @@ class TestBlacklistTokensView:
         settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_SIGNING_KEY = self.sign_key
-        expected_payload = {'jti': '3'}
-        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
-        rf.cookies['jwt_refresh'] = expected_jwt
-        rf.cookies['jwt_access'] = 'value access'
-        expected_payload = {'jti': '4'}
+        expected_payload = {'jti': '4', 'user': {'username': 'alice', 'user_id': 1}}
         expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
         rf.cookies['jwt_refresh'] = expected_jwt
         rf.cookies['jwt_access_payload'] = 'value access payload'
-        rf.cookies['jwt_access_signature'] = 'value access signature'
+        rf.cookies['jwt_access_token'] = 'value access token'
         request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
         csrf_token = get_token(request)
         request.COOKIES['csrftoken'] = csrf_token
@@ -683,9 +775,34 @@ class TestBlacklistTokensView:
         assert obj.jti == '4'
         assert obj.token == expected_jwt
         assert obj.expires is None
+
+    def test_delete_two_cookies_mode_with_csrf(self, rf, settings, monkeypatch):
+        settings.DJWTO_MODE = 'TWO-COOKIES'
+        settings.DJWTO_CSRF = True
+        reload(views)
+        from djwto.views import BlackListTokenView
+
+        settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        expected_payload = {'user': {'username': 'alice', 'user_id': 1}}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_refresh'] = expected_jwt
+        rf.cookies['jwt_access_payload'] = expected_payload
+        rf.cookies['jwt_access_token'] = expected_jwt
+        request = rf.delete('/api/tokens/refresh', {'jwt_type': 'refresh'})
+        csrf_token = get_token(request)
+        request.COOKIES['csrftoken'] = csrf_token
+        request.META['HTTP_X_CSRFTOKEN'] = csrf_token
+        response = BlackListTokenView.as_view()(request)
+
+        assert response.content == (
+            b'{"message": "Tokens successfully deleted."}'
+        )
         assert 'Max-Age=0' in str(response.cookies['jwt_refresh'])
         assert 'Max-Age=0' in str(response.cookies['jwt_access_payload'])
-        assert 'Max-Age=0' in str(response.cookies['jwt_access_signature'])
+        assert 'Max-Age=0' in str(response.cookies['jwt_access_token'])
 
     def test_post_two_cookies_mode_without_csrf(self, rf, settings, monkeypatch):
         settings.DJWTO_MODE = 'TWO-COOKIES'
@@ -696,15 +813,12 @@ class TestBlacklistTokensView:
         settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_SIGNING_KEY = self.sign_key
-        expected_payload = {'jti': '3'}
+        expected_payload = {'jti': '4', 'user': {'username': 'alice', 'user_id': 1}}
         expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
-        rf.cookies['jwt_refresh'] = expected_jwt
-        rf.cookies['jwt_access'] = 'value access'
-        expected_payload = {'jti': '4'}
         expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
         rf.cookies['jwt_refresh'] = expected_jwt
         rf.cookies['jwt_access_payload'] = 'value access payload'
-        rf.cookies['jwt_access_signature'] = 'value access signature'
+        rf.cookies['jwt_access_token'] = 'value access token'
         request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
         response = BlackListTokenView.as_view()(request)
 
@@ -717,6 +831,3 @@ class TestBlacklistTokensView:
         assert obj.jti == '4'
         assert obj.token == expected_jwt
         assert obj.expires is None
-        assert 'Max-Age=0' in str(response.cookies['jwt_refresh'])
-        assert 'Max-Age=0' in str(response.cookies['jwt_access_payload'])
-        assert 'Max-Age=0' in str(response.cookies['jwt_access_signature'])

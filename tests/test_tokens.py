@@ -20,14 +20,17 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import pytest
-import mock
-import jwt as pyjwt
-from datetime import timedelta
-import djwto.tokens as tokens
+from calendar import timegm
+from datetime import datetime, timedelta
 
+import jwt as pyjwt
+import mock
+import pytest
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
+
+import djwto.tokens as tokens
+from djwto.exceptions import JWTValidationError
 
 
 class TestProcessClaims:
@@ -106,8 +109,10 @@ class TestProcessClaims:
             'exp': date_mock + settings.DJWTO_REFRESH_TOKEN_LIFETIME,
             'nbf': date_mock + settings.DJWTO_NBF_LIFETIME,
             'jti': 'uuid',
-            'username': 'alice',
-            'user_id': 1
+            'user': {
+                'username': 'alice',
+                'user_id': 1
+            }
         }
 
         settings.DJWTO_IAT_CLAIM = False
@@ -165,3 +170,152 @@ class TestEncodeClaims:
         expected = pyjwt.encode(claims, 'test key')
         jwt = tokens.encode_claims(claims)
         assert jwt == expected
+
+
+class TestDecodeToken:
+    def test_decode_token_raises(self, settings):
+        sign_key = 'sign key'
+        settings.DJWTO_SIGNING_KEY = sign_key
+        settings.DJWTO_VERIFYING_KEY = None
+        settings.DJWTO_ALGORITHM = 'HS256'
+        settings.DJWTO_ISS_CLAIM = None
+        settings.DJWTO_SUB_CLAIM = None
+        settings.DJWTO_AUD_CLAIM = None
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+
+        payload = {'exp': datetime(2021, 1, 1)}
+        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
+        with pytest.raises(JWTValidationError) as exec_info:
+            _ = tokens.decode_token(token)
+        assert exec_info.value.args[0] == 'Signature has expired'
+
+        token = 'abc.def.ghi'
+        with pytest.raises(JWTValidationError) as exec_info:
+            _ = tokens.decode_token(token)
+        assert exec_info.value.args[0] == (
+            "Invalid header string: 'utf-8' codec can't "
+            "decode byte 0xb7 in position 1: invalid start byte"
+        )
+
+        payload = {'nbf': datetime.now() + timedelta(days=1)}
+        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
+        with pytest.raises(JWTValidationError) as exec_info:
+            _ = tokens.decode_token(token)
+        assert exec_info.value.args[0] == 'The token is not yet valid (nbf)'
+
+        settings.DJWTO_ISS_CLAIM = 'iss'
+        payload = {}
+        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
+        with pytest.raises(JWTValidationError) as exec_info:
+            _ = tokens.decode_token(token)
+        assert exec_info.value.args[0] == 'Token is missing the "iss" claim'
+
+        settings.DJWTO_ISS_CLAIM = 'iss'
+        settings.DJWTO_SUB_CLAIM = 'sub'
+        payload = {'iss': 'iss'}
+        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
+        with pytest.raises(JWTValidationError) as exec_info:
+            _ = tokens.decode_token(token)
+        assert exec_info.value.args[0] == 'Token is missing the "sub" claim'
+
+        settings.DJWTO_ISS_CLAIM = 'iss'
+        settings.DJWTO_SUB_CLAIM = 'sub'
+        settings.DJWTO_AUD_CLAIM = 'aud'
+        payload = {'iss': 'iss', 'sub': 'sub'}
+        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
+        with pytest.raises(JWTValidationError) as exec_info:
+            _ = tokens.decode_token(token)
+        assert exec_info.value.args[0] == 'Token is missing the "aud" claim'
+
+        settings.DJWTO_ISS_CLAIM = 'iss'
+        settings.DJWTO_SUB_CLAIM = 'sub'
+        settings.DJWTO_AUD_CLAIM = 'aud'
+        settings.DJWTO_IAT_CLAIM = True
+        payload = {'iss': 'iss', 'sub': 'sub', 'aud': 'aud'}
+        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
+        with pytest.raises(JWTValidationError) as exec_info:
+            _ = tokens.decode_token(token)
+        assert exec_info.value.args[0] == 'Token is missing the "iat" claim'
+
+        settings.DJWTO_ISS_CLAIM = 'iss'
+        settings.DJWTO_SUB_CLAIM = 'sub'
+        settings.DJWTO_AUD_CLAIM = 'aud'
+        settings.DJWTO_IAT_CLAIM = True
+        settings.DJWTO_JTI_CLAIM = True
+        payload = {'iss': 'iss', 'sub': 'sub', 'aud': 'aud', 'iat': datetime.now()}
+        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
+        with pytest.raises(JWTValidationError) as exec_info:
+            _ = tokens.decode_token(token)
+        assert exec_info.value.args[0] == 'Token is missing the "jti" claim'
+
+    def test_decode_token(self, settings):
+        sign_key = 'sign key'
+        settings.DJWTO_SIGNING_KEY = sign_key
+        settings.DJWTO_VERIFYING_KEY = None
+        settings.DJWTO_ALGORITHM = 'HS256'
+        settings.DJWTO_ISS_CLAIM = None
+        settings.DJWTO_SUB_CLAIM = None
+        settings.DJWTO_AUD_CLAIM = None
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+
+        exp = datetime.now() + timedelta(days=1)
+        payload = {'exp': timegm(exp.utctimetuple())}
+        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
+        result = tokens.decode_token(token)
+        assert result == payload
+
+        sign_key = 'sign key'
+        settings.DJWTO_SIGNING_KEY = sign_key
+        settings.DJWTO_VERIFYING_KEY = None
+        settings.DJWTO_ALGORITHM = 'HS256'
+        settings.DJWTO_ISS_CLAIM = 'iss'
+        settings.DJWTO_SUB_CLAIM = 'sub'
+        settings.DJWTO_AUD_CLAIM = 'aud'
+        settings.DJWTO_IAT_CLAIM = True
+        settings.DJWTO_JTI_CLAIM = True
+
+        exp = datetime.now() + timedelta(days=1)
+        payload = {'exp': timegm(exp.utctimetuple()), 'iss': 'iss', 'sub': 'sub',
+                   'aud': 'aud', 'iat': True, 'jti': True}
+        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
+        result = tokens.decode_token(token)
+        assert result == payload
+
+        sign_key = 'sign key'
+        settings.DJWTO_SIGNING_KEY = sign_key
+        settings.DJWTO_VERIFYING_KEY = None
+        settings.DJWTO_ALGORITHM = 'HS256'
+        settings.DJWTO_ISS_CLAIM = 'iss'
+        settings.DJWTO_SUB_CLAIM = 'sub'
+        settings.DJWTO_AUD_CLAIM = ['aud0', 'aud1']
+        settings.DJWTO_IAT_CLAIM = True
+        settings.DJWTO_JTI_CLAIM = True
+
+        exp = datetime.now() + timedelta(days=1)
+        payload = {'exp': timegm(exp.utctimetuple()), 'iss': 'iss', 'sub': 'sub',
+                   'aud': ['aud0', 'aud1'], 'iat': True, 'jti': True}
+        token = pyjwt.encode(payload, sign_key, algorithm='HS256')
+        result = tokens.decode_token(token)
+        assert result == payload
+
+        sign_key = open('tests/fixtures/keys/jwtRS256.key', 'rb').read()
+        settings.DJWTO_SIGNING_KEY = sign_key
+        settings.DJWTO_VERIFYING_KEY = (
+            open('tests/fixtures/keys/jwtRS256.key.pub', 'rb').read()
+        )
+        settings.DJWTO_ALGORITHM = 'RS256'
+        settings.DJWTO_ISS_CLAIM = 'iss'
+        settings.DJWTO_SUB_CLAIM = 'sub'
+        settings.DJWTO_AUD_CLAIM = 'aud'
+        settings.DJWTO_IAT_CLAIM = True
+        settings.DJWTO_JTI_CLAIM = True
+
+        exp = datetime.now() + timedelta(days=1)
+        payload = {'exp': timegm(exp.utctimetuple()), 'iss': 'iss', 'sub': 'sub',
+                   'aud': 'aud', 'iat': True, 'jti': True}
+        token = pyjwt.encode(payload, sign_key, algorithm='RS256')
+        result = tokens.decode_token(token)
+        assert result == payload
+

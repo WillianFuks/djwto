@@ -39,6 +39,7 @@ from django.utils.decorators import method_decorator
 import djwto.authentication as auth
 import djwto.models as models
 import djwto.tokens as tokens
+from djwto.exceptions import JWTValidationError
 
 
 HEADERS401 = {'WWW-Authenticate': auth.WWWAUTHENTICATE}
@@ -96,7 +97,18 @@ class GetTokensView(View):
     ) -> HttpResponse:
         return super().dispatch(request, *args, **kwargs)
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+    def post(
+        self,
+        request: auth.THttpRequest,
+        *args: Any,
+        **kwargs: Any
+    ) -> JsonResponse:
+        try:
+            _ = auth.get_raw_token_from_request(request)
+            return JsonResponse({'msg': 'User already authenticated.'}, status=200)
+        except (JWTValidationError, ImproperlyConfigured):
+            pass
+
         try:
             user = auth.user_authenticate(request)
         except ValidationError as err:
@@ -252,13 +264,6 @@ class BlackListTokenView(View):
             )
             return JsonResponse({'error': error_msg}, status=403)
 
-        if not settings.DJWTO_JTI_CLAIM:
-            error_msg = (
-                'Value of `settings.DJWTO_JTI_CLAIM` must be `True` in order to use '
-                'Blacklist.'
-            )
-            return JsonResponse({'error': error_msg}, status=403)
-
         type_ = request.POST.get('jwt_type')
         if not type_ or type_ != 'refresh':
             error_msg = 'Field "jwt_type=refresh" must be sent in request.'
@@ -268,7 +273,7 @@ class BlackListTokenView(View):
         if not jti:
             error_msg = (
                 'No jti claim was available in the input token. The value is mandatory'
-                'in order to use the Blacklist api.'
+                ' in order to use the Blacklist API.'
             )
             return JsonResponse({'error': error_msg}, status=403)
 
@@ -290,14 +295,21 @@ class BlackListTokenView(View):
             token=request.token,
             expires=exp
         )
-        return self._build_response()
+        return JsonResponse({'message': 'Token successfully blacklisted.'}, status=409)
 
-    def _build_response(self) -> JsonResponse:
+    def delete(
+        self,
+        request: auth.THttpRequest,
+        *args: Any,
+        **kwargs: Any
+    ) -> JsonResponse:
         """
-        Returns a successfull message to the client and deletes remaining cookies.
+        Deletes both tokens cookies.
         """
-        response = JsonResponse({'message': 'Token successfully blacklisted.'},
-                                status=409)
+        if settings.DJWTO_MODE == 'JSON':
+            return JsonResponse({'message': 'No token to delete.'}, status=204)
+
+        response = JsonResponse({'message': 'Tokens successfully deleted.'})
         response.delete_cookie('jwt_refresh')
 
         if settings.DJWTO_MODE == 'ONE-COOKIE':
@@ -305,5 +317,5 @@ class BlackListTokenView(View):
 
         if settings.DJWTO_MODE == 'TWO-COOKIES':
             response.delete_cookie('jwt_access_payload')
-            response.delete_cookie('jwt_access_signature')
+            response.delete_cookie('jwt_access_token')
         return response
