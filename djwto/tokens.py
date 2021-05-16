@@ -37,6 +37,7 @@ import djwto.exceptions as exceptions
 def process_claims(
     user: Optional[User],
     request: HttpRequest,
+    type_: str = 'refresh',
     *args: Any,
     **kwargs: Any
 ) -> Dict[Any, Any]:
@@ -59,6 +60,8 @@ def process_claims(
           required.
       request: HttpRequest
           Input request received from the WSGI (or ASGI) server.
+      type_: str
+          Whether these claims refers to a refresh or access token.
       args, kwargs: Any
           Those remain as a signature reference for the scenario where one wants to
           extend the functionality of this function.
@@ -128,6 +131,10 @@ def process_claims(
         jti = str(uuid.uuid4())
         claims['jti'] = jti
 
+    # This is necessary for the case when mode is 'JSON' as it's the only way to
+    # identify which token is which
+    claims['type'] = 'refresh'
+
     if user:
         claims['user'] = process_user(user)
     return claims
@@ -149,8 +156,8 @@ def process_user(user: User) -> Dict[str, str]:
           User claims to store in the token payload.
     """
     return {
-        'username': user.get_username(),
-        'user_id': user.pk
+        user.USERNAME_FIELD: user.get_username(),
+        'id': user.pk
     }
 
 
@@ -216,6 +223,7 @@ def get_access_claims_from_refresh(refresh_claims: Dict[Any, Any]) -> Dict[Any, 
         access_claims['iat'] = iat
         access_claims['refresh_iat'] = refresh_iat
     access_timedelta = settings.DJWTO_ACCESS_TOKEN_LIFETIME
+    access_claims['type'] = 'access'
     if access_timedelta:
         _validate_timedelta_claim(access_timedelta)
         access_claims['exp'] = iat + access_timedelta

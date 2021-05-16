@@ -106,9 +106,41 @@ def jwt_login_required(view_func: Callable) -> Callable:
             payload = tokens.decode_token(token)
             request.payload = payload
             request.token = token
-            return ('username' and 'user_id') in payload.get('user', {}), ''
+            return ('username' and 'id') in payload.get('user', {}), ''
         except (JWTValidationError, ImproperlyConfigured) as err:
             return False, str(err)
+    return jwt_passes_test(test_func)(view_func)
+
+
+def jwt_is_refresh(view_func: Callable) -> Callable:
+    """
+    Some views only work with the refresh token. This decorator validates whether the
+    input request has a refresh token or not, returning error response if the token is
+    not found.
+
+    Args
+    ----
+      view_func: Callable
+          Refers to one of the verbs a view can have, such as `POST` or `GET`.
+
+    Returns
+    -------
+      Callable
+          Decorator that returns function to process view if and only if the requried
+          jwt tokens for authentication are available in the income `request` object.
+    """
+    def test_func(request: THttpRequest) -> Tuple[bool, str]:
+        # In this case token should be in Header AUTHORIZATION
+        if settings.DJWTO_MODE == 'JSON':
+            if request.payload.get('type') != 'refresh':
+                return False, 'Refresh token was not sent in authorization header.'
+            return True, ''
+        path = settings.DJWTO_REFRESH_COOKIE_PATH
+        if path not in request.path:
+            return False, f'Refresh token is only sent in path: {path}'
+        if request.method == 'POST' and request.POST.get('jwt_type') != 'refresh':
+            return False, 'POST variable "jwt_type" must be equal to "refresh".'
+        return True, ''
     return jwt_passes_test(test_func)(view_func)
 
 
@@ -220,7 +252,6 @@ def get_raw_token_from_request(request: HttpRequest) -> str:
 
     # Defaults to 'access' to make it easier on the front-end calls
     type_ = request.POST.get('jwt_type', 'access')
-
     if type_ not in {'access', 'refresh'}:
         raise JWTValidationError(
             'Input data "jwt_type" must be either "access" or "refresh".'

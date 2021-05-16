@@ -109,9 +109,10 @@ class TestProcessClaims:
             'exp': date_mock + settings.DJWTO_REFRESH_TOKEN_LIFETIME,
             'nbf': date_mock + settings.DJWTO_NBF_LIFETIME,
             'jti': 'uuid',
+            'type': 'refresh',
             'user': {
                 'username': 'alice',
-                'user_id': 1
+                'id': 1
             }
         }
 
@@ -121,7 +122,8 @@ class TestProcessClaims:
         settings.DJWTO_NBF_LIFETIME = None
         settings.DJWTO_JTI_CLAIM = None
         result = tokens.process_claims(None, request)
-        assert result == {'iss': 'iss', 'sub': 'sub', 'aud': ['1', '2']}
+        assert result == {'iss': 'iss', 'sub': 'sub', 'aud': ['1', '2'],
+                          'type': 'refresh'}
 
 
 class TestGetAccessClaimsFromRefresh:
@@ -146,7 +148,7 @@ class TestGetAccessClaimsFromRefresh:
         settings.DJWTO_ACCESS_TOKEN_LIFETIME = None
         settings.DJWTO_IAT_CLAIM = False
         access_claims = tokens.get_access_claims_from_refresh(claims)
-        assert access_claims == {'sub': 'sub'}
+        assert access_claims == {'sub': 'sub', 'type': 'access'}
 
         d_mock = mock.Mock()
         d_mock.utcnow.return_value = date_mock
@@ -155,13 +157,15 @@ class TestGetAccessClaimsFromRefresh:
         claims['iat'] = date_mock
         access_claims = tokens.get_access_claims_from_refresh(claims)
         assert access_claims == {'sub': 'sub', 'iat': date_mock,
-                                 'refresh_iat': 1609462860.0}
+                                 'refresh_iat': 1609462860.0,
+                                 'type': 'access'}
 
         settings.DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(seconds=1)
         access_claims = tokens.get_access_claims_from_refresh(claims)
         expected_exp = date_mock + settings.DJWTO_ACCESS_TOKEN_LIFETIME
         assert access_claims == {'sub': 'sub', 'iat': date_mock, 'exp': expected_exp,
-                                 'refresh_iat': 1609462860.0}
+                                 'refresh_iat': 1609462860.0,
+                                 'type': 'access'}
 
 
 class TestEncodeClaims:
@@ -318,4 +322,3 @@ class TestDecodeToken:
         token = pyjwt.encode(payload, sign_key, algorithm='RS256')
         result = tokens.decode_token(token)
         assert result == payload
-

@@ -21,7 +21,6 @@
 # SOFTWARE.
 
 import mock
-from calendar import timegm
 from datetime import datetime, timedelta
 
 import jwt as pyjwt
@@ -45,6 +44,147 @@ class MockJWTLoginView(View):
         assert request.payload is not None
         assert 'user' in request.payload
         return JsonResponse({'msg': 'worked'})
+
+
+class MockJWTRefreshRequiredView(View):
+    @method_decorator(auth.jwt_login_required)
+    @method_decorator(auth.jwt_is_refresh)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        from django.conf import settings
+
+        assert request.token is not None
+        assert request.payload is not None
+        assert request.payload['type'] == 'refresh'
+        assert 'user' in request.payload
+        if settings.DJWTO_MODE != 'JSON':
+            assert settings.DJWTO_REFRESH_COOKIE_PATH in request.path
+            assert request.POST.get('jwt_type') == 'refresh'
+        return JsonResponse({'msg': 'worked'})
+
+
+class TestJWTRefreshRequired:
+    sign_key = 'test'
+
+    def test_post_fails_with_refresh_required(self, rf, settings):
+        # First test JSON Mode
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1},
+                            'type': 'access'}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+
+        request = rf.post('/api/tokens')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        response = MockJWTRefreshRequiredView.as_view()(request)
+        assert response.content == (
+            b'{"error": "Refresh token was not sent in authorization header."}'
+        )
+
+        # Test ONE-COOKIE Mode
+        settings.DJWTO_MODE = 'ONE-COOKIE'
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1}}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_refresh'] = 'foo'
+        rf.cookies['jwt_access'] = expected_jwt
+        request = rf.post('/api/tokens')
+        response = MockJWTRefreshRequiredView.as_view()(request)
+        assert response.content == (
+            b'{"error": "Refresh token is only sent in path: /api/tokens/refresh"}'
+        )
+
+        request = rf.post('/api/tokens/refresh')
+        response = MockJWTRefreshRequiredView.as_view()(request)
+        assert response.content == (
+            b'{"error": "POST variable \\"jwt_type\\" must be equal to \\"refresh\\"."}'
+        )
+
+        # Test TWO-COOKIES Mode
+        settings.DJWTO_MODE = 'TWO-COOKIES'
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1}}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_refresh'] = 'foo'
+        rf.cookies['jwt_access_token'] = expected_jwt
+        rf.cookies['jwt_access_payload'] = 'payload'
+        request = rf.post('/api/tokens')
+        response = MockJWTRefreshRequiredView.as_view()(request)
+        assert response.content == (
+            b'{"error": "Refresh token is only sent in path: /api/tokens/refresh"}'
+        )
+
+        request = rf.post('/api/tokens/refresh')
+        response = MockJWTRefreshRequiredView.as_view()(request)
+        assert response.content == (
+            b'{"error": "POST variable \\"jwt_type\\" must be equal to \\"refresh\\"."}'
+        )
+
+    def test_post_with_refresh_required(self, rf, settings):
+        # First test JSON Mode
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1},
+                            'type': 'refresh'}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+
+        request = rf.post('/api/tokens')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        response = MockJWTRefreshRequiredView.as_view()(request)
+        assert response.content == (
+            b'{"msg": "worked"}'
+        )
+
+        # Test ONE-COOKIE Mode
+        settings.DJWTO_MODE = 'ONE-COOKIE'
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1},
+                            'type': 'refresh'}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_refresh'] = expected_jwt
+        rf.cookies['jwt_access'] = 'access'
+        request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
+        response = MockJWTRefreshRequiredView.as_view()(request)
+        assert response.content == (
+            b'{"msg": "worked"}'
+        )
+
+        # Test TWO-COOKIES Mode
+        settings.DJWTO_MODE = 'TWO-COOKIES'
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1},
+                            'type': 'refresh'}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_refresh'] = expected_jwt
+        rf.cookies['jwt_access_payload'] = 'access payload'
+        rf.cookies['jwt_access_token'] = 'access token'
+        request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
+        response = MockJWTRefreshRequiredView.as_view()(request)
+        assert response.content == (
+            b'{"msg": "worked"}'
+        )
 
 
 class TestJWTLoginRequired:
@@ -118,11 +258,12 @@ class TestJWTLoginRequired:
             b'{"error": "Failed to validate token."}'
         )
 
-        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'user_id': 1}}
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1}}
         expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
         request = rf.post('/api/tokens')
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = MockJWTLoginView.as_view()(request)
+        print(response.content)
         assert response.content == (
             b'{"msg": "worked"}'
         )
@@ -142,7 +283,7 @@ class TestJWTLoginRequired:
             b'{"error": "Failed to validate token."}'
         )
 
-        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'user_id': 1}}
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1}}
         expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
         rf.cookies['jwt_refresh'] = 'foo'
         rf.cookies['jwt_access'] = expected_jwt
@@ -169,7 +310,7 @@ class TestJWTLoginRequired:
             b'{"error": "Failed to validate token."}'
         )
 
-        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'user_id': 1}}
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1}}
         expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
         rf.cookies['jwt_refresh'] = 'foo'
         rf.cookies['jwt_access_payload'] = expected_payload

@@ -32,6 +32,7 @@ DJWTO_SUB_CLAIM: Optional[str] = None
 DJWTO_AUD_CLAIM: Optional[Union[List[str], str]] = None
 DJWTO_IAT_CLAIM: bool = True
 DJWTO_JTI_CLAIM: bool = True
+DJWTO_ALLOW_REFRESH_UPDATE: bool = True
 
 DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(minutes=5)
 DJWTO_REFRESH_TOKEN_LIFETIME = timedelta(days=1)

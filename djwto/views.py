@@ -40,6 +40,7 @@ import djwto.authentication as auth
 import djwto.models as models
 import djwto.tokens as tokens
 from djwto.exceptions import JWTValidationError
+from django.contrib.auth import get_user_model
 
 
 HEADERS401 = {'WWW-Authenticate': auth.WWWAUTHENTICATE}
@@ -86,6 +87,183 @@ def _build_decorator(func: Callable) -> Callable:
     return method_decorator(identity)
 
 
+def build_tokens_response(
+    refresh_claims: Dict[str, Any],
+    access_claims: Dict[str, Any],
+) -> JsonResponse:
+    """
+    djwto offers three main modes for returning a response: "JSON", "ONE-COOKIE" or
+    "TWO-COOKIES". This method builds the http response in accordance to what
+    `settings.DJWTO_MODE` specifies.
+
+    For "JSON" option, the tokens as simply put into a dictionary and returned as a
+    JSON response type. For "ONE-COOKIE", each token (refresh and access) is saved
+    into a separate respective cookie.
+
+    In "TWO-COOKIES" mode, the access token is divided in two partes:
+    - "jwt_access_payload": contains the serialized value of the claims stored in an
+    open Http Cookie so the front-end can read it.
+    - "jwt_access_token": jwt token value, stored in a protected cookie for safety.
+
+    The payload part is publicly available for reading by the client whereas the
+    signature is saved as HttpOnly. This allows for the front-end to interact with
+    the JWT content without running the risk of compromising the signature.
+
+    Args
+    ----
+      refresh_claims: Dict[str, Any]
+          Token already encoded.
+      access_claims: Dict[str, Any]
+          If `settings.DJWTO_MODE == 'TWO-COOKIES'` then it's expected the value of
+          `access_claims` will be serialized in the cookie content. This allows for
+          the front-end to have access to its values. The jwt token cookie is still
+          separated and stored under `HttpOnly` and `Secure` conditions.
+
+    Returns
+    -------
+      JsonResponse
+          Returns tokens in accordance to `settings.DJWTO_MODE` value.
+    """
+    refresh_token = tokens.encode_claims(refresh_claims)
+    access_token = tokens.encode_claims(access_claims)
+
+    mode = settings.DJWTO_MODE
+    if mode == 'JSON':
+        return JsonResponse({'refresh': refresh_token, 'access': access_token})
+
+    refresh_lifetime = settings.DJWTO_REFRESH_TOKEN_LIFETIME
+    max_age_refresh = (
+        int(refresh_lifetime.total_seconds()) if refresh_lifetime else None
+    )
+
+    access_lifetime = settings.DJWTO_ACCESS_TOKEN_LIFETIME
+    max_age_access = (
+        int(access_lifetime.total_seconds()) if access_lifetime else None
+    )
+
+    response = JsonResponse({})
+    response.set_cookie(
+        'jwt_refresh',
+        refresh_token,
+        max_age=max_age_refresh,
+        httponly=True,
+        secure=True,
+        path=settings.DJWTO_REFRESH_COOKIE_PATH,
+        samesite=settings.DJWTO_SAME_SITE
+    )
+    if mode == 'ONE-COOKIE':
+        response.set_cookie(
+            'jwt_access',
+            access_token,
+            max_age=max_age_access,
+            httponly=True,
+            secure=True,
+            samesite=settings.DJWTO_SAME_SITE
+        )
+        return response
+    if mode == 'TWO-COOKIES':
+        response.set_cookie(
+            'jwt_access_payload',
+            json.dumps(access_claims, sort_keys=True, cls=DjangoJSONEncoder),
+            max_age=max_age_access,
+            httponly=False,
+            secure=True,
+            samesite=settings.DJWTO_SAME_SITE
+        )
+        response.set_cookie(
+            'jwt_access_token',
+            access_token,
+            max_age=max_age_access,
+            httponly=True,
+            secure=True,
+            samesite=settings.DJWTO_SAME_SITE
+        )
+        return response
+    raise ImproperlyConfigured(
+        'settings.DJWTO_MODE must be either "JSON", "ONE-COOKIE" or "TWO-COOKIES".'
+        f'Received "{mode}" instead.'
+    )
+
+
+class RefreshAccessView(View):
+    """
+    Uses the refresh token to create a new access one.
+    """
+    @_build_decorator(csrf_protect)
+    @method_decorator(auth.jwt_login_required)
+    def dispatch(
+        self, request: auth.THttpRequest, *args: Any, **kwargs: Any
+    ) -> HttpResponse:
+        return super().dispatch(request, *args, **kwargs)
+
+    @method_decorator(auth.jwt_is_refresh)
+    def post(
+        self,
+        request: auth.THttpRequest,
+        *args: Any,
+        **kwargs: Any
+    ) -> JsonResponse:
+        refresh_claims = request.payload
+        access_claims = tokens.get_access_claims_from_refresh(refresh_claims)
+        return build_tokens_response(refresh_claims, access_claims)
+
+
+class UpdateRefreshView(View):
+    """
+    Updates the expiration time of the refresh token. This is particularly useful in
+    scenarios such as web eCommerces where the customer might be close to finalize its
+    purchase and the token goes expired during the checkout.
+
+    In this view the client has the opportunity of updating the refresh token thus
+    avoiding a login requirement on inconvenient moments.
+
+    The `settings.DJWTO_ALLOW_REFRESH_UPDATE` must be `True`, the token must not be
+    blacklisted already (valid only if "JTI" is available) and the user must have a
+    `is_active` flag equal to `True` from the db (if "user" is available in JWT token).
+    """
+    @_build_decorator(csrf_protect)
+    @method_decorator(auth.jwt_login_required)
+    def dispatch(
+        self, request: auth.THttpRequest, *args: Any, **kwargs: Any
+    ) -> HttpResponse:
+        return super().dispatch(request, *args, **kwargs)
+
+    @method_decorator(auth.jwt_is_refresh)
+    def post(
+        self,
+        request: auth.THttpRequest,
+        *args: Any,
+        **kwargs: Any
+    ) -> JsonResponse:
+        fail_resp = JsonResponse({'error': "Can't update refresh token."}, status=500)
+        refresh_claims = request.payload
+
+        if not settings.DJWTO_ALLOW_REFRESH_UPDATE:
+            return fail_resp
+
+        if settings.DJWTO_JTI_CLAIM:
+            jti = refresh_claims['jti']
+            if models.JWTBlacklist.is_blacklisted(jti):
+                return fail_resp
+
+        user_data = refresh_claims.get('user')
+        if user_data:
+            User = get_user_model()
+            try:
+                user = User.objects.get(**user_data)
+            except User.DoesNotExist:
+                return fail_resp
+            if not user.is_active:
+                return JsonResponse({'error': 'User is inactive.'}, status=403)
+
+        iat = datetime.utcnow()
+        refresh_claims['exp'] = iat + settings.DJWTO_REFRESH_TOKEN_LIFETIME
+        if 'iat' in refresh_claims:
+            refresh_claims['iat'] = iat
+        access_claims = tokens.get_access_claims_from_refresh(refresh_claims)
+        return build_tokens_response(refresh_claims, access_claims)
+
+
 class GetTokensView(View):
     """
     Creates the JWT Token and stores then according to the specification in
@@ -116,123 +294,39 @@ class GetTokensView(View):
                                 headers=HEADERS401)
 
         try:
-            refresh_claims = tokens.process_claims(user, request, args, kwargs)
+            refresh_claims = tokens.process_claims(user, request, 'refresh', args,
+                                                   kwargs)
             access_claims = tokens.get_access_claims_from_refresh(refresh_claims)
-
-            refresh_token = tokens.encode_claims(refresh_claims)
-            access_token = tokens.encode_claims(access_claims)
-
-            return self._build_response(refresh_token,  access_token, access_claims)
+            return build_tokens_response(refresh_claims,  access_claims)
 
         except ImproperlyConfigured:
             # As it's an internal error then don't return full error message to the
             # client. It should be handled internally by the server side.
             return JsonResponse({'error': 'Failed to process request.'}, status=500)
 
-    def _build_response(
-            self,
-            refresh_token: str,
-            access_token: str,
-            access_claims: Dict[str, Any],
-    ) -> JsonResponse:
-        """
-        djwto offers three main modes for returning a response: "JSON", "ONE-COOKIE" or
-        "TWO-COOKIES". This method builds the http response in accordance to what
-        `settings.DJWTO_MODE` specifies.
-
-        For "JSON" option, the tokens as simply put into a dictionary and returned as a
-        JSON response type. For "ONE-COOKIE", each token (refresh and access) is saved
-        into a separate respective cookie.
-
-        In "TWO-COOKIES" mode, the access token is divided in two partes:
-        - "jwt_access_payload": contains the serialized value of the claims stored in an
-        open Http Cookie so the front-end can read it.
-        - "jwt_access_token": jwt token value, stored in a protected cookie for safety.
-
-        The payload part is publicly available for reading by the client whereas the
-        signature is saved as HttpOnly. This allows for the front-end to interact with
-        the JWT content without running the risk of compromising the signature.
-
-        Args
-        ----
-          refresh_token: str
-              Token already encoded.
-          access_token: str
-          access_claims: Dict[str, Any]
-              If `settings.DJWTO_MODE == 'TWO-COOKIES'` then it's expected the value of
-              `access_claims` will be serialized in the cookie content. This allows for
-              the front-end to have access to its values. The jwt token cookie is still
-              separated and stored under `HttpOnly` and `Secure` conditions.
-
-        Returns
-        -------
-          JsonResponse
-              Returns tokens in accordance to `settings.DJWTO_MODE` value.
-        """
-        mode = settings.DJWTO_MODE
-        if mode == 'JSON':
-            return JsonResponse({'refresh': refresh_token, 'access': access_token})
-
-        refresh_lifetime = settings.DJWTO_REFRESH_TOKEN_LIFETIME
-        max_age_refresh = (
-            int(refresh_lifetime.total_seconds()) if refresh_lifetime else None
-        )
-
-        access_lifetime = settings.DJWTO_ACCESS_TOKEN_LIFETIME
-        max_age_access = (
-            int(access_lifetime.total_seconds()) if access_lifetime else None
-        )
-
-        response = JsonResponse({})
-        response.set_cookie(
-            'jwt_refresh',
-            refresh_token,
-            max_age=max_age_refresh,
-            httponly=True,
-            secure=True,
-            path=settings.DJWTO_REFRESH_COOKIE_PATH,
-            samesite=settings.DJWTO_SAME_SITE
-        )
-        if mode == 'ONE-COOKIE':
-            response.set_cookie(
-                'jwt_access',
-                access_token,
-                max_age=max_age_access,
-                httponly=True,
-                secure=True,
-                samesite=settings.DJWTO_SAME_SITE
-            )
-            return response
-        if mode == 'TWO-COOKIES':
-            response.set_cookie(
-                'jwt_access_payload',
-                json.dumps(access_claims, sort_keys=True, cls=DjangoJSONEncoder),
-                max_age=max_age_access,
-                httponly=False,
-                secure=True,
-                samesite=settings.DJWTO_SAME_SITE
-            )
-            response.set_cookie(
-                'jwt_access_token',
-                access_token,
-                max_age=max_age_access,
-                httponly=True,
-                secure=True,
-                samesite=settings.DJWTO_SAME_SITE
-            )
-            return response
-        raise ImproperlyConfigured(
-            'settings.DJWTO_MODE must be either "JSON", "ONE-COOKIE" or "TWO-COOKIES".'
-            f'Received "{mode}" instead.'
-        )
-
 
 class ValidateTokensView(View):
     """
     Extracts the jwt token from income `request` and assess if the token is valid.
     """
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
-        pass
+    @_build_decorator(csrf_protect)
+    @method_decorator(auth.jwt_login_required)
+    def post(
+        self,
+        request: auth.THttpRequest,
+        *args: Any,
+        **kwargs: Any
+    ) -> JsonResponse:
+        """
+        In some scenarios it's interesting to have an endpoint which a client can ask
+        whether a given token is valid or not. Notice that even if the token has been
+        Blacklisted but it's still valid the response will confirm its validity.
+
+        It's been designed like that because blacklisted tokens are still valid for its
+        expiration time. Only when requesting for updating the refresh token is that the
+        blacklist API is checked.
+        """
+        return JsonResponse({'msg': 'Token is valid'})
 
 
 class BlackListTokenView(View):
@@ -250,25 +344,13 @@ class BlackListTokenView(View):
     ) -> HttpResponse:
         return super().dispatch(request, *args, **kwargs)
 
+    @method_decorator(auth.jwt_is_refresh)
     def post(
         self,
         request: auth.THttpRequest,
         *args: Any,
         **kwargs: Any
     ) -> JsonResponse:
-        if settings.DJWTO_REFRESH_COOKIE_PATH not in request.path:
-            error_msg = (
-                'Only the refresh token can be blacklisted. The URL endpoint for '
-                'blacklisting must contain the value set in '
-                '`settings.DJWTO_REFRESH_COOKIE_PATH`.'
-            )
-            return JsonResponse({'error': error_msg}, status=403)
-
-        type_ = request.POST.get('jwt_type')
-        if not type_ or type_ != 'refresh':
-            error_msg = 'Field "jwt_type=refresh" must be sent in request.'
-            return JsonResponse({'error': error_msg}, status=403)
-
         jti = request.payload.get('jti')
         if not jti:
             error_msg = (
