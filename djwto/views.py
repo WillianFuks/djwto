@@ -39,6 +39,7 @@ from django.utils.decorators import method_decorator
 import djwto.authentication as auth
 import djwto.models as models
 import djwto.tokens as tokens
+import djwto.signals as signals
 from djwto.exceptions import JWTValidationError
 from django.contrib.auth import get_user_model
 
@@ -205,7 +206,16 @@ class RefreshAccessView(View):
     ) -> JsonResponse:
         refresh_claims = request.payload
         access_claims = tokens.get_access_claims_from_refresh(refresh_claims)
-        return build_tokens_response(refresh_claims, access_claims)
+        response = build_tokens_response(refresh_claims, access_claims)
+
+        signals.jwt_access_refreshed.send(
+            sender=type(self).__name__,
+            request=request,
+            refresh_claims=refresh_claims,
+            access_claims=access_claims
+        )
+
+        return response
 
 
 class UpdateRefreshView(View):
@@ -261,7 +271,17 @@ class UpdateRefreshView(View):
         if 'iat' in refresh_claims:
             refresh_claims['iat'] = iat
         access_claims = tokens.get_access_claims_from_refresh(refresh_claims)
-        return build_tokens_response(refresh_claims, access_claims)
+
+        response = build_tokens_response(refresh_claims, access_claims)
+
+        signals.jwt_refresh_updated.send(
+            sender=type(self).__name__,
+            request=request,
+            refresh_claims=refresh_claims,
+            access_claims=access_claims
+        )
+
+        return response
 
 
 class GetTokensView(View):
@@ -290,6 +310,13 @@ class GetTokensView(View):
         try:
             user = auth.user_authenticate(request)
         except ValidationError as err:
+
+            signals.jwt_login_fail.send(
+                sender=type(self).__name__,
+                request=request,
+                error=err.args[0]
+            )
+
             return JsonResponse({'error': err.args[0]}, status=401,
                                 headers=HEADERS401)
 
@@ -297,9 +324,23 @@ class GetTokensView(View):
             refresh_claims = tokens.process_claims(user, request, 'refresh', args,
                                                    kwargs)
             access_claims = tokens.get_access_claims_from_refresh(refresh_claims)
-            return build_tokens_response(refresh_claims,  access_claims)
+            response = build_tokens_response(refresh_claims,  access_claims)
 
-        except ImproperlyConfigured:
+            signals.jwt_logged_in.send(
+                sender=type(self).__name__,
+                request=request,
+                refresh_claims=refresh_claims,
+                access_claims=access_claims
+            )
+            return response
+
+        except ImproperlyConfigured as err:
+
+            signals.jwt_login_fail.send(
+                sender=type(self).__name__,
+                request=request,
+                error=err.args[0]
+            )
             # As it's an internal error then don't return full error message to the
             # client. It should be handled internally by the server side.
             return JsonResponse({'error': 'Failed to process request.'}, status=500)
@@ -326,6 +367,7 @@ class ValidateTokensView(View):
         expiration time. Only when requesting for updating the refresh token is that the
         blacklist API is checked.
         """
+        signals.jwt_token_validated.send(sender=type(self).__name__, request=request)
         return JsonResponse({'msg': 'Token is valid'})
 
 
@@ -377,6 +419,13 @@ class BlackListTokenView(View):
             token=request.token,
             expires=exp
         )
+
+        signals.jwt_blacklisted.send(
+            sender=type(self).__name__,
+            request=request,
+            jti=jti
+        )
+
         return JsonResponse({'message': 'Token successfully blacklisted.'}, status=409)
 
     def delete(

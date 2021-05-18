@@ -31,6 +31,7 @@ import mock
 import pytest
 
 import djwto.views as views
+import djwto.signals as signals
 from djwto.authentication import WWWAUTHENTICATE
 from djwto.models import JWTBlacklist
 from django.middleware.csrf import get_token
@@ -229,6 +230,68 @@ class TestGetTokensView:
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = GetTokensView.as_view()(request)
         assert response.content == b'{"msg": "User already authenticated."}'
+
+    def test_post_json_mode_sends_signal_on_success(self, rf, settings, monkeypatch):
+        # First set `settings.DJWTO_MODE` properly so when `GetTokensView` is imported
+        # the `_build_decorator` uses the proper function
+        settings.DJWTO_MODE = 'JSON'
+        reload(views)
+        from djwto.views import GetTokensView
+
+        monkeypatch.setattr('djwto.views.tokens.datetime', self.d_mock)
+        monkeypatch.setattr('djwto.views.tokens.uuid', self.uuid_mock)
+
+        # Repeteadly sets `settings` locally to guarantee values are as expected
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        settings.DJWTO_REFRESH_TOKEN_LIFETIME = self.refresh_lifetime
+        settings.DJWTO_ACCESS_TOKEN_LIFETIME = self.access_lifetime
+        settings.DJWTO_NBF_LIFETIME = self.nbf_lifetime
+
+        handler = mock.Mock()
+        signals.jwt_logged_in.connect(handler, sender='GetTokensView')
+
+        request = rf.post('/api/tokens', {'username': 'alice', 'password': 'pass'})
+        _ = GetTokensView.as_view()(request)
+        call = handler.call_args.kwargs
+        assert list(call.keys()) == ['signal', 'sender', 'request', 'refresh_claims',
+                                     'access_claims']
+        assert call['sender'] == 'GetTokensView'
+
+    def test_post_json_mode_sends_signal_on_failure(self, rf):
+        reload(views)
+        from djwto.views import GetTokensView
+
+        handler = mock.Mock()
+        signals.jwt_login_fail.connect(handler, sender='GetTokensView')
+
+        # Invalid password
+        request = rf.post('/api/tokens', {'username': 'alice', 'password': 'pasas'})
+        _ = GetTokensView.as_view()(request)
+
+        call = handler.call_args.kwargs
+        assert list(call.keys()) == ['signal', 'sender', 'request', 'error']
+        assert call['sender'] == 'GetTokensView'
+        assert '__all__' in call['error']
+
+    def test_post_json_mode_sends_signal_on_settings_failure(self, rf, settings):
+        reload(views)
+        from djwto.views import GetTokensView
+
+        settings.DJWTO_MODE = 'invalid'
+
+        handler = mock.Mock()
+        signals.jwt_login_fail.connect(handler, sender='GetTokensView')
+
+        request = rf.post('/api/tokens', {'username': 'alice', 'password': 'pass'})
+        _ = GetTokensView.as_view()(request)
+
+        call = handler.call_args.kwargs
+        assert list(call.keys()) == ['signal', 'sender', 'request', 'error']
+        assert call['sender'] == 'GetTokensView'
+        assert call['error'] == (
+            'settings.DJWTO_MODE must be either "JSON", "ONE-COOKIE" or "TWO-COOKIES".'
+            'Received "invalid" instead.'
+        )
 
     def test_post_one_cookie_mode_ensuring_csrf(self, rf, settings, monkeypatch):
         settings.DJWTO_MODE = 'ONE-COOKIE'
@@ -619,7 +682,6 @@ class TestBlacklistTokensView:
         request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = BlackListTokenView.as_view()(request)
-        print(response.content)
         assert response.content == (
             b'{"message": "Token successfully blacklisted."}'
         )
@@ -630,6 +692,30 @@ class TestBlacklistTokensView:
         assert obj.token == expected_jwt
         exp_str = exp.strftime("%Y-%m-%d %H:%M:%S")
         assert obj.expires.strftime("%Y-%m-%d %H:%M:%S") == exp_str
+
+    def test_post_json_mode_with_csrf_sends_signal(self, rf, settings, monkeypatch):
+        settings.DJWTO_MODE = 'JSON'
+        settings.DJWTO_CSRF = True
+        reload(views)
+        from djwto.views import BlackListTokenView
+
+        handler = mock.Mock()
+        signals.jwt_blacklisted.connect(handler, sender='BlackListTokenView')
+
+        settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'jti': '2', 'exp': exp, 'user': {'username': 'alice',
+                            'id': 1}, 'type': 'refresh'}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        _ = BlackListTokenView.as_view()(request)
+
+        call = handler.call_args.kwargs
+        assert list(call.keys()) == ['signal', 'sender', 'request', 'jti']
+        assert call['sender'] == 'BlackListTokenView'
 
     def test_delete_json_mode_with_csrf(self, rf, settings):
         settings.DJWTO_MODE = 'JSON'
@@ -972,6 +1058,29 @@ class TestValidateTokensView:
             b'{"msg": "Token is valid"}'
         )
 
+    def test_post_sends_signal(self, rf, settings):
+        reload(views)
+        from djwto.views import ValidateTokensView
+
+        # JSON Mode
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1}}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+
+        handler = mock.Mock()
+        signals.jwt_token_validated.connect(handler, sender='ValidateTokensView')
+
+        request = rf.post('/api/tokens')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        _ = ValidateTokensView.as_view()(request)
+
+        call = handler.call_args.kwargs
+        assert list(call.keys()) == ['signal', 'sender', 'request']
+        assert call['sender'] == 'ValidateTokensView'
+
 
 class TestRefreshAccessView:
     sign_key = 'test'
@@ -1093,6 +1202,33 @@ class TestRefreshAccessView:
         assert response.content == b'{}'
         build_mock.assert_any_call(expected_payload, expected_access_payload)
 
+    def test_post_sends_signal(self, rf, settings, monkeypatch, date_mock):
+        reload(views)
+        from djwto.views import RefreshAccessView
+
+        # JSON Mode
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = timegm((datetime.now() + timedelta(days=1)).utctimetuple())
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1},
+                            'type': 'refresh'}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+
+        handler = mock.Mock()
+        signals.jwt_access_refreshed.connect(handler, sender='RefreshAccessView')
+
+        request = rf.post('/api/tokens')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        _ = RefreshAccessView.as_view()(request)
+
+        request = rf.post('/api/tokens', {'username': 'alice', 'password': 'pass'})
+        _ = RefreshAccessView.as_view()(request)
+        call = handler.call_args.kwargs
+        assert list(call.keys()) == ['signal', 'sender', 'request', 'refresh_claims',
+                                     'access_claims']
+        assert call['sender'] == 'RefreshAccessView'
+
 
 @pytest.mark.django_db
 class TestUpdateRefreshView:
@@ -1131,7 +1267,7 @@ class TestUpdateRefreshView:
         response = UpdateRefreshView.as_view()(request)
         assert response.content == b'{"error": "Signature has expired"}'
 
-    def test_post_disallow_refresh_update(self, rf, settings, monkeypatch):
+    def test_post_settings_refresh_update(self, rf, settings, monkeypatch):
         reload(views)
         from djwto.views import UpdateRefreshView
 
@@ -1157,6 +1293,34 @@ class TestUpdateRefreshView:
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = UpdateRefreshView.as_view()(request)
         assert response.content == b'{"error": "Can\'t update refresh token."}'
+
+    def test_post_sends_signal(self, rf, settings, monkeypatch):
+        reload(views)
+        from djwto.views import UpdateRefreshView
+
+        # JSON Mode Disabled Refresh
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        settings.DJWTO_ALLOW_REFRESH_UPDATE = True
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_IAT_CLAIM = False
+        exp = timegm((datetime.now() + timedelta(days=1)).utctimetuple())
+        expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1},
+                            'type': 'refresh'}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+
+        handler = mock.Mock()
+        signals.jwt_refresh_updated.connect(handler, sender='UpdateRefreshView')
+
+        request = rf.post('/api/tokens')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        _ = UpdateRefreshView.as_view()(request)
+
+        request = rf.post('/api/tokens', {'username': 'alice', 'password': 'pass'})
+        _ = UpdateRefreshView.as_view()(request)
+        call = handler.call_args.kwargs
+        assert list(call.keys()) == ['signal', 'sender', 'request', 'refresh_claims',
+                                     'access_claims']
+        assert call['sender'] == 'UpdateRefreshView'
 
     def test_post_blacklist_jti(self, rf, settings, monkeypatch, date_mock):
         reload(views)
