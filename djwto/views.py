@@ -35,6 +35,7 @@ from django.http.response import JsonResponse, HttpResponse
 from django.views import View
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.utils.decorators import method_decorator
+from django.middleware.csrf import rotate_token
 
 import djwto.authentication as auth
 import djwto.models as models
@@ -332,6 +333,9 @@ class GetTokensView(View):
                 refresh_claims=refresh_claims,
                 access_claims=access_claims
             )
+
+            rotate_token(request)
+
             return response
 
         except ImproperlyConfigured as err:
