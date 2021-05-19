@@ -2,3 +2,4 @@
 max-line-length=89
 exclude =
     setup.py
+    djwto/migrations/*
