@@ -1,0 +1,12 @@
+[run]
+branch=True
+include =
+    djwto/*
+omit =
+    djwto/__version__.py
+    djwto/settings.py
+    djwto/migrations/*
+
+[report]
+exclude_lines =
+    pragma: no cover
