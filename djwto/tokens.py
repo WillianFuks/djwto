@@ -22,7 +22,7 @@
 
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Union
 
 import uuid
 from calendar import timegm
@@ -140,7 +140,7 @@ def process_claims(
     return claims
 
 
-def process_user(user: User) -> Dict[str, str]:
+def process_user(user: User) -> Dict[str, Union[str, List[str]]]:
     """
     Process various data related to the database User object. This function can be
     replaced in order to build a different claim set for the user.
@@ -157,8 +157,31 @@ def process_user(user: User) -> Dict[str, str]:
     """
     return {
         user.USERNAME_FIELD: user.get_username(),
-        'id': user.pk
+        'id': user.pk,
+        'perms': process_perms(user)
     }
+
+
+def process_perms(user: User) -> List[str]:
+    """
+    Gets permissions from input user and returns a list with those values. Default
+    function gets all permissions (by running `user.get_all_permissions()`). Change this
+    funtion, by running:
+
+    >>> import djwto.authentication as auth
+    >>> auth.process_perms = new_perms_func
+
+    Args
+    ----
+      user: User
+          Input user as retrieved from database.
+
+    Returns
+    ------
+      perms: List[str]
+          List of permissions extracted from user. By default returns all perms.
+    """
+    return list(user.get_all_permissions())
 
 
 def _validate_timedelta_claim(claim: Optional[timedelta]) -> None:

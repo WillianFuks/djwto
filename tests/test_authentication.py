@@ -65,6 +65,97 @@ class MockJWTRefreshRequiredView(View):
         return JsonResponse({'msg': 'worked'})
 
 
+class MockJWTPermsRequiredViewWithLogin(View):
+    @method_decorator(auth.jwt_login_required)
+    @method_decorator(auth.jwt_perm_required(['perm1', 'perm2']))
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        assert request.token is not None
+        assert request.payload is not None
+        jwt_perms = request.payload.get('user', {}).get('perms')
+        assert jwt_perms is not None
+        assert jwt_perms == ['perm1', 'perm2']
+        return JsonResponse({'msg': 'worked'})
+
+
+class MockJWTPermsRequiredViewWithoutLogin(View):
+    @method_decorator(auth.jwt_perm_required(['perm1', 'perm2']))
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+
+class TestJWTPermsRequired:
+    sign_key = 'test'
+
+    def test_post_fails_with_perms_required(self, rf, settings):
+        # JSON Mode
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {
+            'exp': exp,
+            'user': {'username': 'alice', 'id': 1, 'perms': ['perm1']}
+        }
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+
+        request = rf.post('/api/tokens')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        response = MockJWTPermsRequiredViewWithLogin.as_view()(request)
+        assert response.content == (
+            b'{"error": "Insufficient Permissions."}'
+        )
+
+        # No user
+        expected_payload = {
+            'exp': exp,
+            'user': {'username': 'alice', 'id': 1}
+        }
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+
+        request = rf.post('/api/tokens')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        response = MockJWTPermsRequiredViewWithLogin.as_view()(request)
+        assert response.content == (
+            b'{"error": "Invalid permissions for jwt token."}'
+        )
+
+        # Not logged in first
+        expected_payload = {
+            'exp': exp,
+            'user': {'username': 'alice', 'id': 1, 'perms': ['perm1', 'perm2']}
+        }
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+
+        request = rf.post('/api/tokens')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        response = MockJWTPermsRequiredViewWithoutLogin.as_view()(request)
+        assert response.content == (
+            b'{"error": "Login must happen before evaluating permissions."}'
+        )
+
+    def test_post_with_perms_required(self, rf, settings):
+        # JSON Mode
+        settings.DJWTO_IAT_CLAIM = False
+        settings.DJWTO_JTI_CLAIM = False
+        settings.DJWTO_SIGNING_KEY = self.sign_key
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {
+            'exp': exp,
+            'user': {'username': 'alice', 'id': 1, 'perms': ['perm1', 'perm2']}
+        }
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+
+        request = rf.post('/api/tokens')
+        request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
+        response = MockJWTPermsRequiredViewWithLogin.as_view()(request)
+        assert response.content == (
+            b'{"msg": "worked"}'
+        )
+
+
 class TestJWTRefreshRequired:
     sign_key = 'test'
 

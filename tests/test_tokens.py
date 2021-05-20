@@ -112,7 +112,8 @@ class TestProcessClaims:
             'type': 'refresh',
             'user': {
                 'username': 'alice',
-                'id': 1
+                'id': 1,
+                'perms': []
             }
         }
 

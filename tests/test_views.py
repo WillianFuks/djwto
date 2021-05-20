@@ -42,12 +42,11 @@ from django.http.response import JsonResponse
 class TestGetTokensView:
     CTPL = ('Set-Cookie: {name}={value}; expires={expires}; {http_only}'
             'Max-Age={max_age}; Path={path}; SameSite={samesite}; {secure}')
-
     VTPL = (
         '"{{\\"exp\\": \\"{exp}\\"\\054 \\"iat\\": \\"{iat}\\"\\054 \\"jti\\": '
         '\\"uuid\\"\\054 \\"nbf\\": \\"{nbf}\\"\\054 \\"refresh_iat\\": {refresh_iat}'
         '\\054 \\"type\\": \\"{type_}\\"\\054 \\"user\\": {{\\"id\\": {user_id}'
-        '\\054 \\"username\\": \\"{username}\\"}}}}"'
+        '\\054 \\"perms\\": []\\054 \\"username\\": \\"{username}\\"}}}}"'
     )
     # Test JSON mode creates the token as expected
     date_ = datetime(2021, 1, 1)
@@ -72,6 +71,7 @@ class TestGetTokensView:
         'user': {
             'username': 'alice',
             'id': 1,
+            'perms': []
         },
         'refresh_iat': timegm(date_.utctimetuple())
     }
@@ -85,7 +85,8 @@ class TestGetTokensView:
         'type': 'refresh',
         'user': {
             'username': 'alice',
-            'id': 1
+            'id': 1,
+            'perms': []
         }
     }
     expected_refresh_jwt = pyjwt.encode(expected_refresh_claims, sign_key)
@@ -520,19 +521,6 @@ class TestGetTokensView:
                            self.refresh_lifetime).strftime("%a, %d %b %Y %H:%M:%S GMT")
 
         assert 'csrftoken' not in cookies
-
-        print(str(refresh), '\n')
-        print(self.CTPL.format(
-            name='jwt_refresh',
-            value=self.expected_refresh_jwt,
-            expires=refresh_expires,
-            http_only='HttpOnly; ',
-            max_age=int(self.refresh_lifetime.total_seconds()),
-            path=settings.DJWTO_REFRESH_COOKIE_PATH,
-            samesite=settings.DJWTO_SAME_SITE,
-            secure='Secure'
-        ))
-
         assert str(refresh) == self.CTPL.format(
             name='jwt_refresh',
             value=self.expected_refresh_jwt,

@@ -22,7 +22,7 @@
 
 
 import json
-from typing import Any, Dict, Callable, Tuple
+from typing import Any, Dict, Callable, Tuple, List
 from functools import wraps
 
 from django.conf import settings
@@ -82,7 +82,7 @@ def jwt_passes_test(
     return decorator
 
 
-def jwt_login_required(view_func: Callable) -> Callable:
+def jwt_login_required(func: Callable) -> Callable:
     """
     Similar to the original Django's `login_required` but functioning on top of the jwt
     token as processed from the request. This function specifically enforces on views
@@ -91,7 +91,7 @@ def jwt_login_required(view_func: Callable) -> Callable:
 
     Args
     ----
-      view_func: Callable
+      func: Callable
           Refers to one of the verbs a view can have, such as `POST` or `GET`.
 
     Returns
@@ -109,7 +109,46 @@ def jwt_login_required(view_func: Callable) -> Callable:
             return ('username' and 'id') in payload.get('user', {}), ''
         except (JWTValidationError, ImproperlyConfigured) as err:
             return False, str(err)
-    return jwt_passes_test(test_func)(view_func)
+    return jwt_passes_test(test_func)(func)
+
+
+def jwt_perm_required(perms: List[str]) -> Callable:
+    """
+    Receives a list of permissions and only process the inner function if the jwt token
+    available in the input request have the required permissions.
+    """
+    def process_func(func: Callable) -> Callable:
+        """
+        Similar to the original Django's `permission_required` but functioning on top of
+        the jwt token as processed from the request. This function specifically enforces
+        on views that the input token has a field inside of the claim `user` called
+        `perms` containing the specified permission to process the input function.
+
+        Args
+        ----
+          func: Callable
+              Refers to one of the verbs a view can have, such as `POST` or `GET`.
+
+        Returns
+        -------
+          Callable
+              Decorator that returns function to process view if and only if the requried
+              jwt tokens contains the necessary permissions.
+        """
+        def test_func(request: THttpRequest) -> Tuple[bool, str]:
+            # It's supposed by default that `jwt_login_required` comes first. This
+            # guarantees that `request.payload` will not be `None`
+            if not getattr(request, 'payload', ''):
+                return False, 'Login must happen before evaluating permissions.'
+            payload = request.payload
+            jwt_perms = payload.get('user', {}).get('perms')
+            if jwt_perms:
+                if not all([perm in jwt_perms for perm in perms]):
+                    return False, 'Insufficient Permissions.'
+                return True, ''
+            return False, 'Invalid permissions for jwt token.'
+        return jwt_passes_test(test_func)(func)
+    return process_func
 
 
 def jwt_is_refresh(view_func: Callable) -> Callable:
