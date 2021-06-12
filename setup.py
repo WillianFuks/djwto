@@ -45,7 +45,7 @@ packages = ['djwto']
 
 
 setup(
-    name='dwjto',
+    name='djwto',
     version='0.0.0',
     author='Willian Fuks',
     author_email='willian.fuks@gmail.com',

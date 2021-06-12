@@ -92,6 +92,7 @@ def _build_decorator(func: Callable) -> Callable:
 def build_tokens_response(
     refresh_claims: Dict[str, Any],
     access_claims: Dict[str, Any],
+    msg: str = None
 ) -> JsonResponse:
     """
     djwto offers three main modes for returning a response: "JSON", "ONE-COOKIE" or
@@ -120,6 +121,8 @@ def build_tokens_response(
           `access_claims` will be serialized in the cookie content. This allows for
           the front-end to have access to its values. The jwt token cookie is still
           separated and stored under `HttpOnly` and `Secure` conditions.
+      msg: str
+          Message to return in JSON response to the client.
 
     Returns
     -------
@@ -143,7 +146,7 @@ def build_tokens_response(
         int(access_lifetime.total_seconds()) if access_lifetime else None
     )
 
-    response = JsonResponse({})
+    response = JsonResponse({'msg': msg})
     response.set_cookie(
         'jwt_refresh',
         refresh_token,
@@ -207,7 +210,8 @@ class RefreshAccessView(View):
     ) -> JsonResponse:
         refresh_claims = request.payload
         access_claims = tokens.get_access_claims_from_refresh(refresh_claims)
-        response = build_tokens_response(refresh_claims, access_claims)
+        msg = 'Access token successfully refreshed.'
+        response = build_tokens_response(refresh_claims, access_claims, msg)
 
         signals.jwt_access_refreshed.send(
             sender=type(self).__name__,
@@ -272,8 +276,8 @@ class UpdateRefreshView(View):
         if 'iat' in refresh_claims:
             refresh_claims['iat'] = iat
         access_claims = tokens.get_access_claims_from_refresh(refresh_claims)
-
-        response = build_tokens_response(refresh_claims, access_claims)
+        msg = 'Refresh token successfully updated.'
+        response = build_tokens_response(refresh_claims, access_claims, msg)
 
         signals.jwt_refresh_updated.send(
             sender=type(self).__name__,
@@ -325,7 +329,8 @@ class GetTokensView(View):
             refresh_claims = tokens.process_claims(user, request, 'refresh', args,
                                                    kwargs)
             access_claims = tokens.get_access_claims_from_refresh(refresh_claims)
-            response = build_tokens_response(refresh_claims,  access_claims)
+            msg = 'Tokens successfully created.'
+            response = build_tokens_response(refresh_claims,  access_claims, msg)
 
             signals.jwt_logged_in.send(
                 sender=type(self).__name__,
@@ -430,7 +435,7 @@ class BlackListTokenView(View):
             jti=jti
         )
 
-        return JsonResponse({'message': 'Token successfully blacklisted.'}, status=409)
+        return JsonResponse({'msg': 'Token successfully blacklisted.'}, status=200)
 
     def delete(
         self,
@@ -442,9 +447,9 @@ class BlackListTokenView(View):
         Deletes both tokens cookies.
         """
         if settings.DJWTO_MODE == 'JSON':
-            return JsonResponse({'message': 'No token to delete.'}, status=204)
+            return JsonResponse({'msg': 'No token to delete.'}, status=204)
 
-        response = JsonResponse({'message': 'Tokens successfully deleted.'})
+        response = JsonResponse({'msg': 'Tokens successfully deleted.'})
         response.delete_cookie('jwt_refresh')
 
         if settings.DJWTO_MODE == 'ONE-COOKIE':

@@ -106,6 +106,7 @@ class TestGetTokensView:
             b'password. Note that both fields may be case-sensitive.\\"]}"}'
         )
         assert response.headers['WWW-Authenticate'] == WWWAUTHENTICATE
+        assert response.status_code == 401
 
         # Empty input
         request = rf.post('/api/tokens', {'username': '', 'password': ''})
@@ -114,6 +115,7 @@ class TestGetTokensView:
             b'{"error": "{\\"username\\": [\\"This field is required.\\"], '
             b'\\"password\\": [\\"This field is required.\\"]}"}'
         )
+        assert response.status_code == 401
         assert response.headers['WWW-Authenticate'] == WWWAUTHENTICATE
 
     def test_post_with_wrong_settings_raises(self, rf, settings):
@@ -218,6 +220,7 @@ class TestGetTokensView:
             f'{{"refresh": "{self.expected_refresh_jwt}", '
             f'"access": "{self.expected_access_jwt}"}}'
         ).encode()
+        assert response.status_code == 200
 
         # Tests scenario where JWT is available in request. This case should return
         # a 200 status code with no changes in the backend
@@ -231,6 +234,7 @@ class TestGetTokensView:
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = GetTokensView.as_view()(request)
         assert response.content == b'{"msg": "User already authenticated."}'
+        assert response.status_code == 200
 
     def test_post_json_mode_sends_signal_on_success(self, rf, settings, monkeypatch):
         # First set `settings.DJWTO_MODE` properly so when `GetTokensView` is imported
@@ -353,6 +357,7 @@ class TestGetTokensView:
         request = rf.post('/api/token')
         response = GetTokensView.as_view()(request)
         assert response.content == b'{"msg": "User already authenticated."}'
+        assert response.status_code == 200
 
     def test_post_one_cookie_mode_not_ensuring_csrf(self, rf, settings, monkeypatch):
         settings.DJWTO_MODE = 'ONE-COOKIE'
@@ -413,6 +418,7 @@ class TestGetTokensView:
         request = rf.post('/api/token')
         response = GetTokensView.as_view()(request)
         assert response.content == b'{"msg": "User already authenticated."}'
+        assert response.status_code == 200
 
     def test_post_two_cookies_mode_ensuring_csrf(self, rf, settings, monkeypatch):
         settings.DJWTO_MODE = 'TWO-COOKIES'
@@ -497,6 +503,7 @@ class TestGetTokensView:
         request = rf.post('/api/token')
         response = GetTokensView.as_view()(request)
         assert response.content == b'{"msg": "User already authenticated."}'
+        assert response.status_code == 200
 
     def test_post_two_cookies_mode_not_ensuring_csrf(self, rf, settings, monkeypatch):
         settings.DJWTO_MODE = 'TWO-COOKIES'
@@ -581,6 +588,7 @@ class TestGetTokensView:
         request = rf.post('/api/token')
         response = GetTokensView.as_view()(request)
         assert response.content == b'{"msg": "User already authenticated."}'
+        assert response.status_code == 200
 
 
 @pytest.mark.django_db
@@ -599,6 +607,7 @@ class TestBlacklistTokensView:
         assert response.content == (
             b'{"error": "Token not found in \\"HTTP_AUTHORIZATION\\" header."}'
         )
+        assert response.status_code == 403
 
         # Simulates user logged-in
         settings.DJWTO_IAT_CLAIM = False
@@ -671,8 +680,9 @@ class TestBlacklistTokensView:
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = BlackListTokenView.as_view()(request)
         assert response.content == (
-            b'{"message": "Token successfully blacklisted."}'
+            b'{"msg": "Token successfully blacklisted."}'
         )
+        assert response.status_code == 200
         assert JWTBlacklist.objects.all().count() == 2
         assert JWTBlacklist.objects.filter(jti='2').exists()
         obj = JWTBlacklist.objects.get(jti='2')
@@ -721,8 +731,9 @@ class TestBlacklistTokensView:
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = BlackListTokenView.as_view()(request)
         assert response.content == (
-            b'{"message": "No token to delete."}'
+            b'{"msg": "No token to delete."}'
         )
+        assert response.status_code == 204
 
     def test_post_json_mode_without_csrf(self, rf, settings):
         settings.DJWTO_MODE = 'JSON'
@@ -741,8 +752,9 @@ class TestBlacklistTokensView:
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = BlackListTokenView.as_view()(request)
         assert response.content == (
-            b'{"message": "Token successfully blacklisted."}'
+            b'{"msg": "Token successfully blacklisted."}'
         )
+        assert response.status_code == 200
         assert JWTBlacklist.objects.all().count() == 2
         assert JWTBlacklist.objects.filter(jti='2').exists()
         obj = JWTBlacklist.objects.get(jti='2')
@@ -770,8 +782,9 @@ class TestBlacklistTokensView:
         request.META['HTTP_X_CSRFTOKEN'] = csrf_token
         response = BlackListTokenView.as_view()(request)
         assert response.content == (
-            b'{"message": "Token successfully blacklisted."}'
+            b'{"msg": "Token successfully blacklisted."}'
         )
+        assert response.status_code == 200
         assert JWTBlacklist.objects.all().count() == 2
         assert JWTBlacklist.objects.filter(jti='3').exists()
         obj = JWTBlacklist.objects.get(jti='3')
@@ -800,8 +813,9 @@ class TestBlacklistTokensView:
         request.META['HTTP_X_CSRFTOKEN'] = csrf_token
         response = BlackListTokenView.as_view()(request)
         assert response.content == (
-            b'{"message": "Tokens successfully deleted."}'
+            b'{"msg": "Tokens successfully deleted."}'
         )
+        assert response.status_code == 200
         assert 'Max-Age=0' in str(response.cookies['jwt_refresh'])
         assert 'Max-Age=0' in str(response.cookies['jwt_access'])
 
@@ -821,8 +835,9 @@ class TestBlacklistTokensView:
         request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
         response = BlackListTokenView.as_view()(request)
         assert response.content == (
-            b'{"message": "Token successfully blacklisted."}'
+            b'{"msg": "Token successfully blacklisted."}'
         )
+        assert response.status_code == 200
         assert JWTBlacklist.objects.all().count() == 2
         assert JWTBlacklist.objects.filter(jti='3').exists()
         obj = JWTBlacklist.objects.get(jti='3')
@@ -851,8 +866,9 @@ class TestBlacklistTokensView:
         response = BlackListTokenView.as_view()(request)
 
         assert response.content == (
-            b'{"message": "Token successfully blacklisted."}'
+            b'{"msg": "Token successfully blacklisted."}'
         )
+        assert response.status_code == 200
         assert JWTBlacklist.objects.all().count() == 2
         assert JWTBlacklist.objects.filter(jti='4').exists()
         obj = JWTBlacklist.objects.get(jti='4')
@@ -882,8 +898,9 @@ class TestBlacklistTokensView:
         response = BlackListTokenView.as_view()(request)
 
         assert response.content == (
-            b'{"message": "Tokens successfully deleted."}'
+            b'{"msg": "Tokens successfully deleted."}'
         )
+        assert response.status_code == 200
         assert 'Max-Age=0' in str(response.cookies['jwt_refresh'])
         assert 'Max-Age=0' in str(response.cookies['jwt_access_payload'])
         assert 'Max-Age=0' in str(response.cookies['jwt_access_token'])
@@ -907,8 +924,9 @@ class TestBlacklistTokensView:
         response = BlackListTokenView.as_view()(request)
 
         assert response.content == (
-            b'{"message": "Token successfully blacklisted."}'
+            b'{"msg": "Token successfully blacklisted."}'
         )
+        assert response.status_code == 200
         assert JWTBlacklist.objects.all().count() == 2
         assert JWTBlacklist.objects.filter(jti='4').exists()
         obj = JWTBlacklist.objects.get(jti='4')
@@ -930,6 +948,7 @@ class TestValidateTokensView:
         assert response.content == (
             b'{"error": "Token not found in \\"HTTP_AUTHORIZATION\\" header."}'
         )
+        assert response.status_code == 403
 
         # Invalid JWT
         settings.DJWTO_IAT_CLAIM = False
@@ -979,6 +998,7 @@ class TestValidateTokensView:
         request.META['HTTP_X_CSRFTOKEN'] = csrf_token
         response = ValidateTokensView.as_view()(request)
         assert response.content == b'{"error": "Signature has expired"}'
+        assert response.status_code == 403
 
     def test_post(self, rf, settings):
         reload(views)
@@ -998,6 +1018,7 @@ class TestValidateTokensView:
         assert response.content == (
             b'{"msg": "Token is valid"}'
         )
+        assert response.status_code == 200
 
         # ONE-COOOKIE Mode
         settings.DJWTO_MODE = 'ONE-COOKIE'
@@ -1021,6 +1042,7 @@ class TestValidateTokensView:
         assert response.content == (
             b'{"msg": "Token is valid"}'
         )
+        assert response.status_code == 200
 
         # TWO-COOKIES Mode
         settings.DJWTO_MODE = 'TWO-COOKIES'
@@ -1045,6 +1067,7 @@ class TestValidateTokensView:
         assert response.content == (
             b'{"msg": "Token is valid"}'
         )
+        assert response.status_code == 200
 
     def test_post_sends_signal(self, rf, settings):
         reload(views)
@@ -1105,6 +1128,7 @@ class TestRefreshAccessView:
         request.META['HTTP_X_CSRFTOKEN'] = csrf_token
         response = RefreshAccessView.as_view()(request)
         assert response.content == b'{"error": "Signature has expired"}'
+        assert response.status_code == 403
 
     def test_post(self, rf, settings, monkeypatch, date_mock):
         reload(views)
@@ -1135,7 +1159,8 @@ class TestRefreshAccessView:
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = RefreshAccessView.as_view()(request)
         assert response == 'worked'
-        build_mock.assert_any_call(expected_payload, expected_access_payload)
+        msg = 'Access token successfully refreshed.'
+        build_mock.assert_any_call(expected_payload, expected_access_payload, msg)
 
         # ONE-COOOKIE Mode
         settings.DJWTO_MODE = 'ONE-COOKIE'
@@ -1161,7 +1186,8 @@ class TestRefreshAccessView:
         request.META['HTTP_X_CSRFTOKEN'] = csrf_token
         response = RefreshAccessView.as_view()(request)
         assert response.content == b'{}'
-        build_mock.assert_any_call(expected_payload, expected_access_payload)
+        assert response.status_code == 200
+        build_mock.assert_any_call(expected_payload, expected_access_payload, msg)
 
         # TWO-COOOKIES Mode
         settings.DJWTO_MODE = 'TWO-COOKIES'
@@ -1188,7 +1214,7 @@ class TestRefreshAccessView:
         request.META['HTTP_X_CSRFTOKEN'] = csrf_token
         response = RefreshAccessView.as_view()(request)
         assert response.content == b'{}'
-        build_mock.assert_any_call(expected_payload, expected_access_payload)
+        build_mock.assert_any_call(expected_payload, expected_access_payload, msg)
 
     def test_post_sends_signal(self, rf, settings, monkeypatch, date_mock):
         reload(views)
@@ -1254,6 +1280,7 @@ class TestUpdateRefreshView:
         request.META['HTTP_X_CSRFTOKEN'] = csrf_token
         response = UpdateRefreshView.as_view()(request)
         assert response.content == b'{"error": "Signature has expired"}'
+        assert response.status_code == 403
 
     def test_post_settings_refresh_update(self, rf, settings, monkeypatch):
         reload(views)
@@ -1273,6 +1300,7 @@ class TestUpdateRefreshView:
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = UpdateRefreshView.as_view()(request)
         assert response.content == b'{"error": "Can\'t update refresh token."}'
+        assert response.status_code == 500
 
         # Enable Refresh and JTI
         settings.DJWTO_ALLOW_REFRESH_UPDATE = True
@@ -1281,6 +1309,7 @@ class TestUpdateRefreshView:
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = UpdateRefreshView.as_view()(request)
         assert response.content == b'{"error": "Can\'t update refresh token."}'
+        assert response.status_code == 500
 
     def test_post_sends_signal(self, rf, settings, monkeypatch):
         reload(views)
@@ -1337,6 +1366,7 @@ class TestUpdateRefreshView:
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = UpdateRefreshView.as_view()(request)
         assert response.content == b'{"error": "Can\'t update refresh token."}'
+        assert response.status_code == 500
 
         # Token is not blacklisted now
         expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1},
@@ -1353,7 +1383,8 @@ class TestUpdateRefreshView:
         response = UpdateRefreshView.as_view()(request)
 
         expected_payload['exp'] = date_mock + settings.DJWTO_REFRESH_TOKEN_LIFETIME
-        build_mock.assert_any_call(expected_payload, expected_access_payload)
+        msg = 'Refresh token successfully updated.'
+        build_mock.assert_any_call(expected_payload, expected_access_payload, msg)
 
         # Add IAT
         settings.DJWTO_IAT_CLAIM = True
@@ -1370,7 +1401,7 @@ class TestUpdateRefreshView:
         expected_access_payload['refresh_iat'] = timegm(date_mock.utctimetuple())
 
         response = UpdateRefreshView.as_view()(request)
-        build_mock.assert_any_call(expected_payload, expected_access_payload)
+        build_mock.assert_any_call(expected_payload, expected_access_payload, msg)
 
     def test_post_user_errors(self, rf, settings, monkeypatch, date_mock):
         reload(views)
@@ -1390,6 +1421,7 @@ class TestUpdateRefreshView:
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = UpdateRefreshView.as_view()(request)
         assert response.content == b'{"error": "User is inactive."}'
+        assert response.status_code == 403
 
         # User doesn't exist
         expected_payload = {'exp': exp, 'user': {'username': 'claire', 'id': 3},
@@ -1399,6 +1431,7 @@ class TestUpdateRefreshView:
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = UpdateRefreshView.as_view()(request)
         assert response.content == b'{"error": "Can\'t update refresh token."}'
+        assert response.status_code == 500
 
         # Scenario where user is not saved in token
         settings.DJWTO_IAT_CLAIM = False
@@ -1444,5 +1477,6 @@ class TestUpdateRefreshView:
         request = rf.post('/api/tokens')
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = UpdateRefreshView.as_view()(request)
-        build_mock.assert_any_call(expected_payload, expected_access_payload)
+        msg = 'Refresh token successfully updated.'
+        build_mock.assert_any_call(expected_payload, expected_access_payload, msg)
         auth.jwt_login_required = backup
