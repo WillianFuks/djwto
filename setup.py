@@ -25,13 +25,14 @@
 import os
 import sys
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 
 here = os.path.abspath(os.path.dirname(__file__))
 
 install_requires = [
     'django',
+    'pyjwt[crypto]'
 ]
 tests_require = [
     'tox'
@@ -41,7 +42,7 @@ setup_requires = [
     'mypy',
 ]
 
-packages = ['djwto']
+packages = find_packages()
 
 
 setup(

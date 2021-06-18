@@ -21,21 +21,22 @@
 # SOFTWARE.
 
 
-from datetime import datetime, timedelta
+import base64
 from calendar import timegm
-import djwto.tokens as tokens
+from datetime import datetime, timedelta
 from importlib import reload
 
 import jwt as pyjwt
 import mock
 import pytest
+from django.http.response import JsonResponse
+from django.middleware.csrf import get_token
 
-import djwto.views as views
 import djwto.signals as signals
+import djwto.tokens as tokens
+import djwto.views as views
 from djwto.authentication import WWWAUTHENTICATE
 from djwto.models import JWTBlacklist
-from django.middleware.csrf import get_token
-from django.http.response import JsonResponse
 
 
 @pytest.mark.django_db
@@ -43,10 +44,9 @@ class TestGetTokensView:
     CTPL = ('Set-Cookie: {name}={value}; expires={expires}; {http_only}'
             'Max-Age={max_age}; Path={path}; SameSite={samesite}; {secure}')
     VTPL = (
-        '"{{\\"exp\\": \\"{exp}\\"\\054 \\"iat\\": \\"{iat}\\"\\054 \\"jti\\": '
-        '\\"uuid\\"\\054 \\"nbf\\": \\"{nbf}\\"\\054 \\"refresh_iat\\": {refresh_iat}'
-        '\\054 \\"type\\": \\"{type_}\\"\\054 \\"user\\": {{\\"id\\": {user_id}'
-        '\\054 \\"perms\\": []\\054 \\"username\\": \\"{username}\\"}}}}"'
+        '{{"exp": "{exp}", "iat": "{iat}", "jti": "uuid", "nbf": "{nbf}", '
+        '"refresh_iat": {refresh_iat}, "type": "{type_}", "user": {{"id": {user_id}, '
+        '"perms": [], "username": "{username}"}}}}'
     )
     # Test JSON mode creates the token as expected
     date_ = datetime(2021, 1, 1)
@@ -464,6 +464,7 @@ class TestGetTokensView:
             user_id=1,
             username='alice'
         )
+        value = '"' + base64.b64encode(value.encode()).decode() + '"'
 
         access_payload = cookies['jwt_access_payload']
         access_expires = (now +
@@ -548,6 +549,7 @@ class TestGetTokensView:
             user_id=1,
             username='alice'
         )
+        value = '"' + base64.b64encode(value.encode()).decode() + '"'
 
         access_payload = cookies['jwt_access_payload']
         access_expires = (now +

@@ -25,7 +25,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, List, Union
 
 import uuid
-from calendar import timegm
 import jwt as pyjwt
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -241,8 +240,8 @@ def get_access_claims_from_refresh(refresh_claims: Dict[Any, Any]) -> Dict[Any, 
         # whether it's necessary to create a new refresh token. This is useful for
         # instance on eCommerce websites that might not want to logout a customer that is
         # still currently active on the website.
-        # The value must be in POSIX timestamp in order to be serialized by pyJWT.
-        refresh_iat = timegm(access_claims['iat'].utctimetuple())
+        # The value must be in POSIX timestamp in order to be serialized by PyJWT.
+        refresh_iat = access_claims['iat']
         access_claims['iat'] = iat
         access_claims['refresh_iat'] = refresh_iat
     access_timedelta = settings.DJWTO_ACCESS_TOKEN_LIFETIME

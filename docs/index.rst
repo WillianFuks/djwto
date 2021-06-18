@@ -23,7 +23,7 @@ Details of each point will be further explained in this doc.
 
    getting_started
    settings
-   support
+   walkthrough
 
 
 Indices and tables

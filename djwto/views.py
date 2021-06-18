@@ -23,26 +23,28 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from datetime import datetime
-from typing import Any, Dict, Callable
+from typing import Any, Callable, Dict
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
 from django.http.request import HttpRequest
-from django.http.response import JsonResponse, HttpResponse
-from django.views import View
-from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
-from django.utils.decorators import method_decorator
+from django.http.response import HttpResponse, JsonResponse
 from django.middleware.csrf import rotate_token
+from django.utils.decorators import method_decorator
+from django.views import View
+from django.views.decorators.csrf import (csrf_exempt, csrf_protect,
+                                          ensure_csrf_cookie)
 
 import djwto.authentication as auth
 import djwto.models as models
-import djwto.tokens as tokens
 import djwto.signals as signals
+import djwto.tokens as tokens
 from djwto.exceptions import JWTValidationError
-from django.contrib.auth import get_user_model
 
 
 HEADERS401 = {'WWW-Authenticate': auth.WWWAUTHENTICATE}
@@ -169,7 +171,10 @@ def build_tokens_response(
     if mode == 'TWO-COOKIES':
         response.set_cookie(
             'jwt_access_payload',
-            json.dumps(access_claims, sort_keys=True, cls=DjangoJSONEncoder),
+            base64.b64encode(
+                json.dumps(access_claims, sort_keys=True,
+                           cls=DjangoJSONEncoder).encode(),
+            ).decode(),
             max_age=max_age_access,
             httponly=False,
             secure=True,
@@ -194,13 +199,14 @@ class RefreshAccessView(View):
     """
     Uses the refresh token to create a new access one.
     """
-    @_build_decorator(csrf_protect)
-    @method_decorator(auth.jwt_login_required)
+    @method_decorator(csrf_exempt)
     def dispatch(
-        self, request: auth.THttpRequest, *args: Any, **kwargs: Any
+        self, request: HttpRequest, *args: Any, **kwargs: Any
     ) -> HttpResponse:
         return super().dispatch(request, *args, **kwargs)
 
+    @_build_decorator(csrf_protect)
+    @method_decorator(auth.jwt_login_required)
     @method_decorator(auth.jwt_is_refresh)
     def post(
         self,
@@ -294,12 +300,13 @@ class GetTokensView(View):
     Creates the JWT Token and stores then according to the specification in
     `settings.DJWTO_MODE`.
     """
-    @_build_decorator(ensure_csrf_cookie)
+    @method_decorator(csrf_exempt)
     def dispatch(
         self, request: HttpRequest, *args: Any, **kwargs: Any
     ) -> HttpResponse:
         return super().dispatch(request, *args, **kwargs)
 
+    @_build_decorator(ensure_csrf_cookie)
     def post(
         self,
         request: auth.THttpRequest,
@@ -359,6 +366,12 @@ class ValidateTokensView(View):
     """
     Extracts the jwt token from income `request` and assess if the token is valid.
     """
+    @method_decorator(csrf_exempt)
+    def dispatch(
+        self, request: HttpRequest, *args: Any, **kwargs: Any
+    ) -> HttpResponse:
+        return super().dispatch(request, *args, **kwargs)
+
     @_build_decorator(csrf_protect)
     @method_decorator(auth.jwt_login_required)
     def post(
