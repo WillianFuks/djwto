@@ -26,6 +26,7 @@ from __future__ import annotations
 import base64
 import json
 from datetime import datetime
+from calendar import timegm
 from typing import Any, Callable, Dict
 
 from django.conf import settings
@@ -155,7 +156,7 @@ def build_tokens_response(
         max_age=max_age_refresh,
         httponly=True,
         secure=True,
-        path=settings.DJWTO_REFRESH_COOKIE_PATH,
+        path=f'/{settings.DJWTO_REFRESH_COOKIE_PATH}',
         samesite=settings.DJWTO_SAME_SITE
     )
     if mode == 'ONE-COOKIE':
@@ -215,6 +216,13 @@ class RefreshAccessView(View):
         **kwargs: Any
     ) -> JsonResponse:
         refresh_claims = request.payload
+
+        if settings.DJWTO_JTI_CLAIM:
+            jti = refresh_claims['jti']
+            if models.JWTBlacklist.is_blacklisted(jti):
+                return JsonResponse({'error': "Can't update access token."},
+                                    status=500)
+
         access_claims = tokens.get_access_claims_from_refresh(refresh_claims)
         msg = 'Access token successfully refreshed.'
         response = build_tokens_response(refresh_claims, access_claims, msg)
@@ -242,13 +250,14 @@ class UpdateRefreshView(View):
     blacklisted already (valid only if "JTI" is available) and the user must have a
     `is_active` flag equal to `True` from the db (if "user" is available in JWT token).
     """
-    @_build_decorator(csrf_protect)
-    @method_decorator(auth.jwt_login_required)
+    @method_decorator(csrf_exempt)
     def dispatch(
-        self, request: auth.THttpRequest, *args: Any, **kwargs: Any
+        self, request: HttpRequest, *args: Any, **kwargs: Any
     ) -> HttpResponse:
         return super().dispatch(request, *args, **kwargs)
 
+    @_build_decorator(csrf_protect)
+    @method_decorator(auth.jwt_login_required)
     @method_decorator(auth.jwt_is_refresh)
     def post(
         self,
@@ -271,16 +280,20 @@ class UpdateRefreshView(View):
         if user_data:
             User = get_user_model()
             try:
-                user = User.objects.get(**user_data)
+                username = user_data.get(User.USERNAME_FIELD)
+                # TODO: typing is not recognizing `get_by_natural_key` here
+                user = User.objects.get_by_natural_key(username)  # type: ignore
             except User.DoesNotExist:
                 return fail_resp
             if not user.is_active:
                 return JsonResponse({'error': 'User is inactive.'}, status=403)
 
         iat = datetime.utcnow()
-        refresh_claims['exp'] = iat + settings.DJWTO_REFRESH_TOKEN_LIFETIME
+        refresh_claims['exp'] = timegm(
+            (iat + settings.DJWTO_REFRESH_TOKEN_LIFETIME).utctimetuple()
+        )
         if 'iat' in refresh_claims:
-            refresh_claims['iat'] = iat
+            refresh_claims['iat'] = timegm(iat.utctimetuple())
         access_claims = tokens.get_access_claims_from_refresh(refresh_claims)
         msg = 'Refresh token successfully updated.'
         response = build_tokens_response(refresh_claims, access_claims, msg)
@@ -401,13 +414,14 @@ class BlackListTokenView(View):
     Only the refresh token can be blacklisted. After the operation, available cookies are
     deleted accordingly as well.
     """
-    @_build_decorator(csrf_protect)
-    @method_decorator(auth.jwt_login_required)
+    @method_decorator(csrf_exempt)
     def dispatch(
-        self, request: auth.THttpRequest, *args: Any, **kwargs: Any
+        self, request: HttpRequest, *args: Any, **kwargs: Any
     ) -> HttpResponse:
         return super().dispatch(request, *args, **kwargs)
 
+    @_build_decorator(csrf_protect)
+    @method_decorator(auth.jwt_login_required)
     @method_decorator(auth.jwt_is_refresh)
     def post(
         self,
@@ -450,6 +464,8 @@ class BlackListTokenView(View):
 
         return JsonResponse({'msg': 'Token successfully blacklisted.'}, status=200)
 
+    @_build_decorator(csrf_protect)
+    @method_decorator(auth.jwt_login_required)
     def delete(
         self,
         request: auth.THttpRequest,
@@ -463,7 +479,10 @@ class BlackListTokenView(View):
             return JsonResponse({'msg': 'No token to delete.'}, status=204)
 
         response = JsonResponse({'msg': 'Tokens successfully deleted.'})
-        response.delete_cookie('jwt_refresh')
+        response.delete_cookie(
+            'jwt_refresh',
+            path=f'/{settings.DJWTO_REFRESH_COOKIE_PATH}'
+        )
 
         if settings.DJWTO_MODE == 'ONE-COOKIE':
             response.delete_cookie('jwt_access')

@@ -105,9 +105,10 @@ class TestProcessClaims:
             'iss': 'iss',
             'sub': 'sub',
             'aud': 'aud',
-            'iat': date_mock,
-            'exp': date_mock + settings.DJWTO_REFRESH_TOKEN_LIFETIME,
-            'nbf': date_mock + settings.DJWTO_NBF_LIFETIME,
+            'iat': timegm(date_mock.utctimetuple()),
+            'exp': timegm(
+                (date_mock + settings.DJWTO_REFRESH_TOKEN_LIFETIME).utctimetuple()),
+            'nbf': timegm((date_mock + settings.DJWTO_NBF_LIFETIME).utctimetuple()),
             'jti': 'uuid',
             'type': 'refresh',
             'user': {
@@ -155,16 +156,17 @@ class TestGetAccessClaimsFromRefresh:
         d_mock.utcnow.return_value = date_mock
         monkeypatch.setattr('djwto.tokens.datetime', d_mock)
         settings.DJWTO_IAT_CLAIM = True
-        claims['iat'] = date_mock
+        claims['iat'] = date_mock.timestamp()
         access_claims = tokens.get_access_claims_from_refresh(claims)
-        assert access_claims == {'sub': 'sub', 'iat': date_mock,
+        assert access_claims == {'sub': 'sub', 'iat': timegm(date_mock.utctimetuple()),
                                  'refresh_iat': 1609462860.0,
                                  'type': 'access'}
 
         settings.DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(seconds=1)
         access_claims = tokens.get_access_claims_from_refresh(claims)
         expected_exp = date_mock + settings.DJWTO_ACCESS_TOKEN_LIFETIME
-        assert access_claims == {'sub': 'sub', 'iat': date_mock, 'exp': expected_exp,
+        assert access_claims == {'sub': 'sub', 'iat': timegm(date_mock.utctimetuple()),
+                                 'exp': timegm(expected_exp.utctimetuple()),
                                  'refresh_iat': 1609462860.0,
                                  'type': 'access'}
 

@@ -4,7 +4,9 @@ Getting Started
 Installation
 ------------
 
-Install **djwto** with pip:
+Install djwto with pip:
+
+.. code-block:: shell
 
   pip install djwto
 
@@ -19,7 +21,21 @@ Then add ``'djwto'`` to the list of ``INSTALLED_APPS`` in your *settings.py* fil
         'djwto'
     ]
 
-Please refer to :ref:`settings` for more information on how to fully customize **djwto**.
+Please refer to :ref:`settings` for more information on how to configure djwto.
+
+For using the default urls offered by this package, simply add them to your ``urls.py`` file:
+
+.. code-block::
+
+  from django.contrib import admin
+  from django.urls import path, include
+
+
+  urlpatterns = [
+    path('', include('djwto.urls')),
+  ]
+
+Please refer to :ref:`endpoints` for a detailed explanation of all endpoints available.
 
 Requirements
 ------------
@@ -30,7 +46,7 @@ Requirements
 Overview
 --------
 
-**djwto** was designed to operate in 3 available modes:
+djwto was designed to operate in 3 available modes:
 
 - ``JSON``
 
@@ -44,6 +60,7 @@ Overview
   sess = requests.Session()
   r = sess.post('https://localhost:8001/login/',
                 data={'username': 'alice', 'password': 'pass'})
+
   r.json()
   {'refresh': 'eyJ0eXAiO.eyJpc3MiOiJ.QXq8sbgIEgT', 'access': 'eyJ0eXAiOi.eyJpc3MiOiJ.TtSnWdrhWuX'}
 
@@ -62,6 +79,7 @@ The JWTs are saved into cookies:
   sess = requests.Session()
   r = sess.post('https://localhost:8001/login/',
                 data={'username': 'alice', 'password': 'pass'})
+
   sess.cookies
   <RequestsCookieJar[Cookie(name='csrftoken', value='DB6kR7o'), Cookie(name='jwt_access', value='eyJ0.eyJpc.kJsR'), Cookie(name='jwt_refresh', value='eyJ0e.eyJ.wWr')]>
 
@@ -79,6 +97,7 @@ The JWTs are saved into cookies:
   sess = requests.Session()
   r = sess.post('https://localhost:8001/login/',
                 data={'username': 'alice', 'password': 'pass'})
+
   sess.cookies
   <RequestsCookieJar[Cookie(name='csrftoken', value='N1vJ9D'), Cookie(name='jwt_access_payload', value='eyJhdWQiO.ZXJuYW1lIj.FsaWN'), Cookie(name='jwt_access_token', value='eyJ0eXAi.OiJKV1QiLC.JhbGciOiJIU'), Cookie(name='jwt_refresh', value='eyJ0eXA.iOiJKV1Qi.LCJhbGc')]>
 

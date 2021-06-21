@@ -1,9 +1,9 @@
 djwto
 =====
 
-Welcome to **djwto**'s documentation!
+Welcome to djwto's documentation!
 
-**djwto** (reads *"jot two"*) is an alternative JWT authentication system built for Django
+djwto (reads *jot two*) is an alternative JWT authentication system built for Django
 applications. It was designed to offer some new features for the auth layer, such as:
 
 - Authentication can be either a *bearer token* or a *cookie*.
@@ -23,7 +23,10 @@ Details of each point will be further explained in this doc.
 
    getting_started
    settings
-   walkthrough
+   endpoints
+   signals
+   customization
+   protect
 
 
 Indices and tables

@@ -44,7 +44,7 @@ class TestGetTokensView:
     CTPL = ('Set-Cookie: {name}={value}; expires={expires}; {http_only}'
             'Max-Age={max_age}; Path={path}; SameSite={samesite}; {secure}')
     VTPL = (
-        '{{"exp": "{exp}", "iat": "{iat}", "jti": "uuid", "nbf": "{nbf}", '
+        '{{"exp": {exp}, "iat": {iat}, "jti": "uuid", "nbf": {nbf}, '
         '"refresh_iat": {refresh_iat}, "type": "{type_}", "user": {{"id": {user_id}, '
         '"perms": [], "username": "{username}"}}}}'
     )
@@ -325,7 +325,7 @@ class TestGetTokensView:
             expires=refresh_expires,
             http_only='HttpOnly; ',
             max_age=int(self.refresh_lifetime.total_seconds()),
-            path=settings.DJWTO_REFRESH_COOKIE_PATH,
+            path=f'/{settings.DJWTO_REFRESH_COOKIE_PATH}',
             samesite=settings.DJWTO_SAME_SITE,
             secure='Secure'
         )
@@ -386,7 +386,7 @@ class TestGetTokensView:
             expires=refresh_expires,
             http_only='HttpOnly; ',
             max_age=int(self.refresh_lifetime.total_seconds()),
-            path=settings.DJWTO_REFRESH_COOKIE_PATH,
+            path=f'/{settings.DJWTO_REFRESH_COOKIE_PATH}',
             samesite=settings.DJWTO_SAME_SITE,
             secure='Secure'
         )
@@ -450,15 +450,15 @@ class TestGetTokensView:
             expires=refresh_expires,
             http_only='HttpOnly; ',
             max_age=int(self.refresh_lifetime.total_seconds()),
-            path=settings.DJWTO_REFRESH_COOKIE_PATH,
+            path=f'/{settings.DJWTO_REFRESH_COOKIE_PATH}',
             samesite=settings.DJWTO_SAME_SITE,
             secure='Secure'
         )
 
         value = self.VTPL.format(
-            exp=(self.date_ + self.access_lifetime).strftime("%Y-%m-%dT%H:%M:%S"),
-            iat=self.date_.strftime("%Y-%m-%dT%H:%M:%S"),
-            nbf=(self.date_ + self.nbf_lifetime).strftime("%Y-%m-%dT%H:%M:%S"),
+            exp=timegm((self.date_ + self.access_lifetime).utctimetuple()),
+            iat=timegm(self.date_.utctimetuple()),
+            nbf=timegm((self.date_ + self.nbf_lifetime).utctimetuple()),
             refresh_iat=timegm(self.date_.utctimetuple()),
             type_='access',
             user_id=1,
@@ -469,6 +469,7 @@ class TestGetTokensView:
         access_payload = cookies['jwt_access_payload']
         access_expires = (now +
                           self.access_lifetime).strftime("%a, %d %b %Y %H:%M:%S GMT")
+
         assert str(access_payload) == self.CTPL.format(
             name='jwt_access_payload',
             value=value,
@@ -535,15 +536,15 @@ class TestGetTokensView:
             expires=refresh_expires,
             http_only='HttpOnly; ',
             max_age=int(self.refresh_lifetime.total_seconds()),
-            path=settings.DJWTO_REFRESH_COOKIE_PATH,
+            path=f'/{settings.DJWTO_REFRESH_COOKIE_PATH}',
             samesite=settings.DJWTO_SAME_SITE,
             secure='Secure'
         )
 
         value = self.VTPL.format(
-            exp=(self.date_ + self.access_lifetime).strftime("%Y-%m-%dT%H:%M:%S"),
-            iat=self.date_.strftime("%Y-%m-%dT%H:%M:%S"),
-            nbf=(self.date_ + self.nbf_lifetime).strftime("%Y-%m-%dT%H:%M:%S"),
+            exp=timegm((self.date_ + self.access_lifetime).utctimetuple()),
+            iat=timegm(self.date_.utctimetuple()),
+            nbf=timegm((self.date_ + self.nbf_lifetime).utctimetuple()),
             refresh_iat=timegm(self.date_.utctimetuple()),
             type_='access',
             user_id=1,
@@ -1098,6 +1099,7 @@ class TestValidateTokensView:
 class TestRefreshAccessView:
     sign_key = 'test'
 
+    @pytest.mark.django_db
     def test_post_returns_error_response(self, rf, settings):
         # Test view is protected by CSRF
         settings.DJWTO_CSRF = True
@@ -1132,6 +1134,23 @@ class TestRefreshAccessView:
         assert response.content == b'{"error": "Signature has expired"}'
         assert response.status_code == 403
 
+        # Refresh Token was Blacklisted
+        settings.DJWTO_JTI_CLAIM = True
+
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp, 'jti': 1, 'user': {'username': 'alice', 'id': 1},
+                            'type': 'refresh'}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_refresh'] = expected_jwt
+        rf.cookies['jwt_access'] = 'value access'
+        request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
+        csrf_token = get_token(request)
+        request.COOKIES['csrftoken'] = csrf_token
+        request.META['HTTP_X_CSRFTOKEN'] = csrf_token
+        response = RefreshAccessView.as_view()(request)
+        assert response.content == b'{"error": "Can\'t update access token."}'
+        assert response.status_code == 500
+
     def test_post(self, rf, settings, monkeypatch, date_mock):
         reload(views)
         from djwto.views import RefreshAccessView
@@ -1154,7 +1173,8 @@ class TestRefreshAccessView:
         expected_payload = tokens.decode_token(expected_jwt)
 
         expected_access_payload = expected_payload.copy()
-        expected_access_payload['exp'] = date_mock + settings.DJWTO_ACCESS_TOKEN_LIFETIME
+        expected_access_payload['exp'] = timegm(
+            (date_mock + settings.DJWTO_ACCESS_TOKEN_LIFETIME).utctimetuple())
         expected_access_payload['type'] = 'access'
 
         request = rf.post('/api/tokens')
@@ -1377,32 +1397,38 @@ class TestUpdateRefreshView:
         expected_payload = tokens.decode_token(expected_jwt)
 
         expected_access_payload = expected_payload.copy()
-        expected_access_payload['exp'] = date_mock + settings.DJWTO_ACCESS_TOKEN_LIFETIME
+        expected_access_payload['exp'] = timegm(
+            (date_mock + settings.DJWTO_ACCESS_TOKEN_LIFETIME).utctimetuple())
         expected_access_payload['type'] = 'access'
 
         request = rf.post('/api/tokens')
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = UpdateRefreshView.as_view()(request)
 
-        expected_payload['exp'] = date_mock + settings.DJWTO_REFRESH_TOKEN_LIFETIME
+        expected_payload['exp'] = timegm(
+            (date_mock + settings.DJWTO_REFRESH_TOKEN_LIFETIME).utctimetuple()
+        )
         msg = 'Refresh token successfully updated.'
         build_mock.assert_any_call(expected_payload, expected_access_payload, msg)
 
         # Add IAT
         settings.DJWTO_IAT_CLAIM = True
         expected_payload = {'exp': exp, 'user': {'username': 'alice', 'id': 1},
-                            'type': 'refresh', 'jti': '2', 'iat': date_mock}
+                            'type': 'refresh', 'jti': '2',
+                            'iat': timegm(date_mock.utctimetuple())}
         expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
         expected_payload = tokens.decode_token(expected_jwt)
 
         request = rf.post('/api/tokens')
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
-        expected_payload['exp'] = date_mock + settings.DJWTO_REFRESH_TOKEN_LIFETIME
-        expected_payload['iat'] = date_mock
-        expected_access_payload['iat'] = date_mock
+        expected_payload['exp'] = timegm(
+            (date_mock + settings.DJWTO_REFRESH_TOKEN_LIFETIME).utctimetuple()
+        )
+        expected_payload['iat'] = timegm(date_mock.utctimetuple())
+        expected_access_payload['iat'] = timegm(date_mock.utctimetuple())
         expected_access_payload['refresh_iat'] = timegm(date_mock.utctimetuple())
 
-        response = UpdateRefreshView.as_view()(request)
+        _ = UpdateRefreshView.as_view()(request)
         build_mock.assert_any_call(expected_payload, expected_access_payload, msg)
 
     def test_post_user_errors(self, rf, settings, monkeypatch, date_mock):
@@ -1471,10 +1497,12 @@ class TestUpdateRefreshView:
         expected_payload = tokens.decode_token(expected_jwt)
 
         expected_access_payload = expected_payload.copy()
-        expected_access_payload['exp'] = date_mock + settings.DJWTO_ACCESS_TOKEN_LIFETIME
+        expected_access_payload['exp'] = timegm(
+            (date_mock + settings.DJWTO_ACCESS_TOKEN_LIFETIME).utctimetuple())
         expected_access_payload['type'] = 'access'
 
-        expected_payload['exp'] = date_mock + settings.DJWTO_REFRESH_TOKEN_LIFETIME
+        expected_payload['exp'] = timegm(
+            (date_mock + settings.DJWTO_REFRESH_TOKEN_LIFETIME).utctimetuple())
 
         request = rf.post('/api/tokens')
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
