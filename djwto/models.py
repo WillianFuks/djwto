@@ -22,8 +22,6 @@
 
 
 from django.db import models
-from django.conf import settings
-from djwto.exceptions import JWTBlacklistError
 
 
 class JWTBlacklist(models.Model):

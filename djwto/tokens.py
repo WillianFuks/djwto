@@ -114,18 +114,18 @@ def process_claims(
 
     iat = datetime.utcnow()
     if settings.DJWTO_IAT_CLAIM:
-        claims['iat'] = iat
+        claims['iat'] = timegm(iat.utctimetuple())
 
     if exp_timedelta:
         _validate_timedelta_claim(exp_timedelta)
         exp = iat + exp_timedelta
-        claims['exp'] = exp
+        claims['exp'] = timegm(exp.utctimetuple())
 
     nbf_timedelta = settings.DJWTO_NBF_LIFETIME
     if nbf_timedelta:
         _validate_timedelta_claim(exp_timedelta)
         nbf = iat + nbf_timedelta
-        claims['nbf'] = nbf
+        claims['nbf'] = timegm(nbf.utctimetuple())
 
     if settings.DJWTO_JTI_CLAIM:
         jti = str(uuid.uuid4())
@@ -241,15 +241,14 @@ def get_access_claims_from_refresh(refresh_claims: Dict[Any, Any]) -> Dict[Any, 
         # whether it's necessary to create a new refresh token. This is useful for
         # instance on eCommerce websites that might not want to logout a customer that is
         # still currently active on the website.
-        # The value must be in POSIX timestamp in order to be serialized by pyJWT.
-        refresh_iat = timegm(access_claims['iat'].utctimetuple())
-        access_claims['iat'] = iat
+        refresh_iat = access_claims['iat']
+        access_claims['iat'] = timegm(iat.utctimetuple())
         access_claims['refresh_iat'] = refresh_iat
     access_timedelta = settings.DJWTO_ACCESS_TOKEN_LIFETIME
     access_claims['type'] = 'access'
     if access_timedelta:
         _validate_timedelta_claim(access_timedelta)
-        access_claims['exp'] = iat + access_timedelta
+        access_claims['exp'] = timegm((iat + access_timedelta).utctimetuple())
     return access_claims
 
 

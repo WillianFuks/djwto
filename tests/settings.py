@@ -65,6 +65,8 @@ INSTALLED_APPS = [
     'djwto',
 ]
 
+ROOT_URLCONF = 'djwto.urls'
+
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
 LANGUAGE_CODE = 'en-us'

@@ -19,3 +19,25 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+
+from djwto import views
+from django.urls import path
+from django.conf import settings
+
+
+urlpatterns = [
+    path('login/', views.GetTokensView.as_view(), name='login'),
+    path(f'{settings.DJWTO_REFRESH_COOKIE_PATH}/logout/',
+         views.BlackListTokenView.as_view(), name='logout'),
+    path('validate_access/', views.ValidateTokensView.as_view(), name='validate_access'),
+    path(f'{settings.DJWTO_REFRESH_COOKIE_PATH}/validate_refresh/',
+         views.ValidateTokensView.as_view(), name='validate_refresh'),
+    path(f'{settings.DJWTO_REFRESH_COOKIE_PATH}/refresh_access/',
+         views.RefreshAccessView.as_view(), name='refresh_access'),
+]
+
+if settings.DJWTO_ALLOW_REFRESH_UPDATE:
+    urlpatterns.append(
+        path(f'{settings.DJWTO_REFRESH_COOKIE_PATH}/update_refresh/',
+             views.UpdateRefreshView.as_view(), name='update_refresh'),
+    )
