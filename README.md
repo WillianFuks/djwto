@@ -49,7 +49,9 @@ And for using its defaults urls, add it to your `urls.py` project file:
 
 ## Overview
 
-djwto offers 3 main ways to process the JWT tokens, which is defined by the settings `DJWTO_MODE`.  Despite of the mode running, the tokens are always returned as **access* and *****refresh**. The first is inteded to be short-lived and used more often whereas the second lives longer and is only sent on a specific path as defined by the setting `DJWTO_REFRESH_COOKIE_PATH`. Its purpose, as the name implies, is to refresh and create a new *access* token.
+djwto offers 3 main ways to process the JWT tokens, which is defined by the settings `DJWTO_MODE`.  Despite of the mode running, the tokens are always returned as `acccess` and `refresh`.
+
+The first is intended to be short-lived and used more often whereas the second lives longer and is only sent on a specific path as defined by the setting `DJWTO_REFRESH_COOKIE_PATH`. Its purpose, as the name implies, is to refresh and create a new *access* token.
 
 Here's an overview of each mode available:
 
@@ -572,3 +574,9 @@ If you run these examples with settings ``DJWTO_MODE=TWO-COOKIES``, you'll be ab
   base64.b64decode(sess.cookies['jwt_access_payload'])
   b'{"aud": "aud", "exp": 1624269024, "iat": 1624239024, "iss": "iss", "jti": "0e9bfcdc-d684-47b5-9677-0cb5e5e88893", "refresh_iat": 1624239024, "sub": "sub", "type": "access", "user": {"email": "alice@djwto.com", "id": 1, "perms": ["perm1"], "username": "alice"}}'
 ```
+
+## Contributing and Bugs
+
+Contributions are very welcome! If you want to send a PR please consider first discussing your implementation on an issue.
+
+Also, if you find bugs (this is still an alpha project!) please let us know by also opening an issue on the official repository.
