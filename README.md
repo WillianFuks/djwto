@@ -10,7 +10,7 @@ djwto (it reads "*jot two*") is an alternative library offering support for JWT 
 - **Customizable**. Add your own code when you see fit.
 - **Full Auth Layer**: protect your views by requiring the JWT tokens to be present in the income request. Also available for the permissions layer.
 
-Complete documentation is also available.
+Complete [documentation](https://djwto.readthedocs.io/en/latest/?) is also available at ReadTheDocs.
 
 ## Installation
 
@@ -149,7 +149,7 @@ Here's an overview of all settings available for djwto:
     SECRET_KEY = 'key'
 ```
 
-For a thorough view of each please refer to the docs.
+For a thorough view of each please refer to the official [docs](https://djwto.readthedocs.io/en/latest/?).
 
 ## Endpoints
 

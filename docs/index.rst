@@ -27,11 +27,3 @@ Details of each point will be further explained in this doc.
    signals
    customization
    protect
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
