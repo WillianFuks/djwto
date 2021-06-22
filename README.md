@@ -2,13 +2,15 @@
 
 Welcome to djwto!
 
-djwto (it reads "*jot two*") is an alternative library offering support for JWT based authentication on top of the Django framework. Its main features are:
+djwto ("*jot two*") is an alternative library offering support for JWT based authentication on top of the Django framework. Its main features are:
 
 - Authentication either through a **Bearer** token or **Cookies**.
-- Offers the possibility of splitting the *access* token into **two** parts: one is not encoded, contains only the token payload and can be used by the client while the other part is fully encoded and contains the signature for the auth process on the backend (that's why the name of this lib).
+- **Access** token can be divided into two parts where one part is not encoded and can be used by the client (hence the lib name).
 - **CSRF** protection by default.
 - **Customizable**. Add your own code when you see fit.
 - **Full Auth Layer**: protect your views by requiring the JWT tokens to be present in the income request. Also available for the permissions layer.
+
+## Documentation
 
 Complete [documentation](https://djwto.readthedocs.io/en/latest/?) is also available at ReadTheDocs.
 
@@ -16,7 +18,9 @@ Complete [documentation](https://djwto.readthedocs.io/en/latest/?) is also avail
 
 Install it through pip directly:
 
+```sh
     pip install djwto
+```
 
 Then make it available in your `INSTALLED_APPS`:
 
@@ -48,6 +52,17 @@ And for using its defaults urls, add it to your `urls.py` project file:
 - Django 3+
 
 ## Overview
+
+Contents:
+- [Json](#json)
+- [One-cookie](#one-cookie)
+- [Two-cookies](#two-cookies)
+- [Settings](#settings)
+- [Endpoints](#endpoints)
+- [Signals](#signals)
+- [Customization](#customization)
+- [Protecting Views](#protecting-views)
+- [Constributing and Bugs](#contributing-and-bugs)
 
 djwto offers 3 main ways to process the JWT tokens, which is defined by the settings `DJWTO_MODE`.  Despite of the mode running, the tokens are always returned as `acccess` and `refresh`.
 

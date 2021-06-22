@@ -601,6 +601,7 @@ class TestBlacklistTokensView:
     def test_post_returns_error_response(self, rf, settings):
         reload(views)
         from djwto.views import BlackListTokenView
+
         # Blacklist endpoint defined in a URL that does not contain the path of the
         # refresh cookie. This case should fail as no refresh cookie can be retrieved
         # for blacklisting

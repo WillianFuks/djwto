@@ -1,4 +1,6 @@
 flake8
+mock
+mypy
 django-stubs
 isort
 typing_extensions

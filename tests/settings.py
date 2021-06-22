@@ -21,10 +21,10 @@
 # SOFTWARE.
 
 
-from typing import Optional, Union, List
 from datetime import timedelta
-from typing_extensions import Literal
+from typing import List, Optional, Union
 
+from typing_extensions import Literal
 
 # Refence for each claim: https://tools.ietf.org/html/rfc7519#page-9
 DJWTO_ISS_CLAIM: Optional[str] = None

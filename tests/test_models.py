@@ -21,7 +21,6 @@
 # SOFTWARE.
 
 import pytest
-
 from django.apps.registry import apps
 from django.db import connection
 from django.db.migrations.autodetector import MigrationAutodetector

@@ -22,17 +22,17 @@
 
 
 import json
-from typing import Any, Dict, Callable, Tuple, List
 from functools import wraps
+from typing import Any, Callable, Dict, List, Tuple
 
 from django.conf import settings
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.http.request import HttpRequest
 from django.http.response import JsonResponse
-from django.core.exceptions import ImproperlyConfigured, ValidationError
-import djwto.tokens as tokens
 
+import djwto.tokens as tokens
 from djwto.exceptions import JWTValidationError
 
 
