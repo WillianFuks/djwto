@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Python Version: ${{ matrix.python }}
+      - name: Python Version ${{ matrix.python }}
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python }}
@@ -28,8 +28,9 @@ jobs:
             ${{ runner.os }}-
 
       - name: Install dependencies
-        python -m pip install --upgrade pip
-        pip install tox tox-gh-actions
+        run: |
+          python -m pip install --upgrade pip
+          pip install tox tox-gh-actions
 
       - name: Test with tox
         run: tox
