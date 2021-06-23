@@ -1,6 +1,6 @@
-# djwto
+![](logo.png)
 
-Welcome to djwto!
+Welcome to **djwto**!
 
 djwto ("*jot two*") is an alternative library offering support for JWT based authentication on top of the Django framework. Its main features are:
 
