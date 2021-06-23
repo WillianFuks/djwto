@@ -1,3 +1,11 @@
+[![Build Status](https://github.com/WillianFuks/djwto/actions/workflows/run-tests.yml/badge.svg)](https://github.com/WillianFuks/djwto/actions)
+[![Build Status](https://github.com/WillianFuks/djwto/actions/workflows/publish-to-pypi.yml/badge.svg)](https://github.com/WillianFuks/djwto/actions)
+[![Coverage Status](https://codecov.io/gh/WillianFuks/djwto/branch/master/graph/badge.svg)](https://codecov.io/gh/WillianFuks/djwto/branch/master/) 
+[![PyPI version](https://badge.fury.io/py/djwto.svg)](https://badge.fury.io/py/djwto) 
+[![GitHub license](https://img.shields.io/github/license/WillianFuks/djwto.svg)](https://github.com/WillianFuks/djwto/blob/master/LICENSE)
+[![Documentation Status](https://readthedocs.org/projects/djwto/badge/?version=latest)](https://djwto.readthedocs.io/en/latest/?badge=latest)
+[![Pyversions](https://img.shields.io/pypi/pyversions/djwto.svg)](https://pypi.python.org/pypi/djwto)
+
 ![](https://raw.githubusercontent.com/WillianFuks/djwto/master/logo.png)
 
 Welcome to **djwto**!
