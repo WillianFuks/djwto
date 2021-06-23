@@ -35,8 +35,5 @@ jobs:
       - name: Test with tox
         run: tox
 
-      - name: Coveralls
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        uses: coverallsapp/github-action@master
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload coverage
+        uses: codecov/codecov-action@v1
