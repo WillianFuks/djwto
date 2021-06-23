@@ -37,14 +37,8 @@ jobs:
         env:
           TOX_SKIP_ENV: coverage
 
-      - name: print
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: echo "THE VALUE IS: ${{ matrix.python }}"
-
       - name: Build Coverage
-        if: ${{ matrix.os == 'ubuntu-latest' && matrix.python == '3.8' }}
         run: tox -e coverage
 
       - name: Upload coverage
-        if: ${{ matrix.os == 'ubuntu-latest' && matrix.python == '3.8' }}
         uses: codecov/codecov-action@v1
