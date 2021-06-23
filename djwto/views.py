@@ -25,8 +25,8 @@ from __future__ import annotations
 
 import base64
 import json
-from datetime import datetime
 from calendar import timegm
+from datetime import datetime
 from typing import Any, Callable, Dict
 
 from django.conf import settings
@@ -46,7 +46,6 @@ import djwto.models as models
 import djwto.signals as signals
 import djwto.tokens as tokens
 from djwto.exceptions import JWTValidationError
-
 
 HEADERS401 = {'WWW-Authenticate': auth.WWWAUTHENTICATE}
 

@@ -21,9 +21,9 @@
 # SOFTWARE.
 
 from datetime import datetime, timedelta
+from importlib import reload
 
 import jwt as pyjwt
-from importlib import reload
 import pytest
 from django.urls import reverse
 

@@ -31,7 +31,7 @@ from setuptools import setup, find_packages
 here = os.path.abspath(os.path.dirname(__file__))
 
 install_requires = [
-    'django',
+    'Django',
     'pyjwt[crypto]'
 ]
 tests_require = [

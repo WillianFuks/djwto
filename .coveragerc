@@ -1,4 +1,5 @@
 [run]
+source=djwto
 branch=True
 include =
     djwto/*

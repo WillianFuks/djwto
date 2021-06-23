@@ -601,6 +601,7 @@ class TestBlacklistTokensView:
     def test_post_returns_error_response(self, rf, settings):
         reload(views)
         from djwto.views import BlackListTokenView
+
         # Blacklist endpoint defined in a URL that does not contain the path of the
         # refresh cookie. This case should fail as no refresh cookie can be retrieved
         # for blacklisting
@@ -1096,10 +1097,10 @@ class TestValidateTokensView:
         assert call['sender'] == 'ValidateTokensView'
 
 
+@pytest.mark.django_db
 class TestRefreshAccessView:
     sign_key = 'test'
 
-    @pytest.mark.django_db
     def test_post_returns_error_response(self, rf, settings):
         # Test view is protected by CSRF
         settings.DJWTO_CSRF = True
@@ -1237,6 +1238,23 @@ class TestRefreshAccessView:
         response = RefreshAccessView.as_view()(request)
         assert response.content == b'{}'
         build_mock.assert_any_call(expected_payload, expected_access_payload, msg)
+
+        # Refresh Token was NOT Blacklisted
+        settings.DJWTO_JTI_CLAIM = True
+
+        exp = datetime.now() + timedelta(days=1)
+        expected_payload = {'exp': exp, 'jti': 3, 'user': {'username': 'alice', 'id': 1},
+                            'type': 'refresh'}
+        expected_jwt = pyjwt.encode(expected_payload, self.sign_key)
+        rf.cookies['jwt_refresh'] = expected_jwt
+        rf.cookies['jwt_access'] = 'value access'
+        request = rf.post('/api/tokens/refresh', {'jwt_type': 'refresh'})
+        csrf_token = get_token(request)
+        request.COOKIES['csrftoken'] = csrf_token
+        request.META['HTTP_X_CSRFTOKEN'] = csrf_token
+        response = RefreshAccessView.as_view()(request)
+        assert response.content == b'{}'
+        assert response.status_code == 200
 
     def test_post_sends_signal(self, rf, settings, monkeypatch, date_mock):
         reload(views)

@@ -20,15 +20,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import mock
 from datetime import datetime, timedelta
 
 import jwt as pyjwt
+import mock
 import pytest
 from django.core.exceptions import ImproperlyConfigured, ValidationError
-from django.views import View
 from django.http.response import JsonResponse
 from django.utils.decorators import method_decorator
+from django.views import View
 
 import djwto.authentication as auth
 from djwto.exceptions import JWTValidationError
