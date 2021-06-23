@@ -36,7 +36,7 @@ jobs:
         run: tox
 
       - name: Coveralls
-        if: ${{ matrix.os == 'linux' }}
+        if: ${{ matrix.os == 'ubuntu-latest' }}
         uses: coverallsapp/github-action@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
