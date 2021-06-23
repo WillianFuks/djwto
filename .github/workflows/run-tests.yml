@@ -38,7 +38,8 @@ jobs:
           TOX_SKIP_ENV: coverage
 
       - name: print
-        run: echo " THE VALUE IS: ${{ matrix.python }}"
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: echo "THE VALUE IS: ${{ matrix.python }}"
 
       - name: Build Coverage
         if: ${{ matrix.os == 'ubuntu-latest' && matrix.python == '3.8' }}
