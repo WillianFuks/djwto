@@ -1,4 +1,4 @@
-![](logo.png)
+![](https://raw.githubusercontent.com/WillianFuks/djwto/master/logo.png)
 
 Welcome to **djwto**!
 

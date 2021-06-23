@@ -25,6 +25,7 @@
 import os
 import sys
 
+from codecs import open
 from setuptools import setup, find_packages
 
 
@@ -44,13 +45,23 @@ setup_requires = [
 
 packages = find_packages()
 
+_version = {}
+_version_path = os.path.join(here, 'djwto', '__version__.py')
+
+with open(_version_path, 'r', 'utf-8') as f:
+    exec(f.read(), _version)
+
+with open('README.md', 'r', 'utf-8') as f:
+    readme = f.read()
 
 setup(
     name='djwto',
-    version='0.0.0',
+    version=_version['__version__'],
     author='Willian Fuks',
     author_email='willian.fuks@gmail.com',
-    description= "Testing",
+    description= "JWT based Auth layer built on top of Django.",
+    long_description=readme,
+    long_description_content_type='text/markdown',
     packages=packages,
     include_package_data=True,
     install_requires=install_requires,
@@ -60,17 +71,21 @@ setup(
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Environment :: Console',
+        'Framework :: Django',
         'Intended Audience :: Developers',
         'Intended Audience :: Education',
-        'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: Apache Software License',
+        'Intended Audience :: End Users/Desktop',
+        'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
         'Operating System :: Unix',
-        'Programming Language :: Python :: 3.6',
+        'Operating System :: Microsoft :: Windows',
+        'Topic :: Internet',
+        'Topic :: Security',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: Implementation :: CPython',
-        'Topic :: Scientific/Engineering',
+        'Typing :: Typed'
     ],
     python_requires='>=3',
 )
