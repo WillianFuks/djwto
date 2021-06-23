@@ -62,7 +62,7 @@ Contents:
 - [Signals](#signals)
 - [Customization](#customization)
 - [Protecting Views](#protecting-views)
-- [Constributing and Bugs](#contributing-and-bugs)
+- [Contributing and Bugs](#contributing-and-bugs)
 
 djwto offers 3 main ways to process the JWT tokens, which is defined by the settings `DJWTO_MODE`.  Despite of the mode running, the tokens are always returned as `acccess` and `refresh`.
 
