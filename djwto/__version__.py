@@ -21,4 +21,4 @@
 # SOFTWARE.
 
 
-__version__ = '0.0.0-rc.2'
+__version__ = '0.0.1'
