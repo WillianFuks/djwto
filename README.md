@@ -150,6 +150,11 @@ Notice the access token now have two components: payload and the token itself. T
 Here's an overview of all settings available for djwto:
 
 ```python
+
+    import os
+    from datetime import timedelta
+
+
     DJWTO_ISS_CLAIM = 'iss'
     DJWTO_SUB_CLAIM = 'sub'
     DJWTO_AUD_CLAIM = 'aud'
@@ -158,18 +163,18 @@ Here's an overview of all settings available for djwto:
 
     DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(minutes=5)
     DJWTO_REFRESH_TOKEN_LIFETIME = timedelta(days=1)
-    DJWTO_NBF_LIFETIME = timedelta(minutes=1)
-    DJWTO_SIGNING_KEY = 'test key'
+    DJWTO_NBF_LIFETIME = timedelta(minutes=0)
+    DJWTO_SIGNING_KEY = os.environ['DJWTO_SIGNING_KEY']
 
     # Only set if Algorithm uses asymetrical signing.
     DJWTO_VERIFYING_KEY: = None
+
     DJWTO_ALGORITHM = 'HS256'
     DJWTO_MODE = 'JSON'
     DJWTO_REFRESH_COOKIE_PATH = '/api/token/refresh'
     DJWTO_SAME_SITE = 'Lax'
     DJWTO_CSRF = True
     DJWTO_ALLOW_REFRESH_UPDATE = True
-    SECRET_KEY = 'key'
 ```
 
 For a thorough view of each please refer to the official [docs](https://djwto.readthedocs.io/en/latest/?).
