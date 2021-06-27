@@ -7,6 +7,10 @@ Here is an example of all the options available for setting how **djwto** runs:
 
 .. code-block::
 
+    import os
+    from datetime import timedelta
+
+
     DJWTO_ISS_CLAIM = 'iss'
     DJWTO_SUB_CLAIM = 'sub'
     DJWTO_AUD_CLAIM = 'aud'
@@ -15,18 +19,18 @@ Here is an example of all the options available for setting how **djwto** runs:
 
     DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(minutes=5)
     DJWTO_REFRESH_TOKEN_LIFETIME = timedelta(days=1)
-    DJWTO_NBF_LIFETIME = timedelta(minutes=1)
-    DJWTO_SIGNING_KEY = 'test key'
+    DJWTO_NBF_LIFETIME = timedelta(minutes=0)
+    DJWTO_SIGNING_KEY = os.environ['DJWTO_SIGNING_KEY']
 
     # Only set if Algorithm uses asymetrical signing.
-    DJWTO_VERIFYING_KEY: Optional[str] = None
+    DJWTO_VERIFYING_KEY: = None
+
     DJWTO_ALGORITHM = 'HS256'
     DJWTO_MODE = 'JSON'
     DJWTO_REFRESH_COOKIE_PATH = '/api/token/refresh'
     DJWTO_SAME_SITE = 'Lax'
     DJWTO_CSRF = True
     DJWTO_ALLOW_REFRESH_UPDATE = True
-    SECRET_KEY = 'key'
 
 ``DJWTO_ISS_CLAIM``
 -------------------
@@ -51,7 +55,7 @@ Boolean that indicates whether to save the *IAT* claim or not. Defaults to `True
 ``DJWTO_JTI_CLAIM``
 -------------------
 
-Boolean that indicates whether to save a *JTI* claim or not. The identifier is unique and must be available in order to use the BLACKLIST APPPPPPPPPPPP. This value is optional.
+Boolean that indicates whether to save a *JTI* claim or not. The identifier is unique and must be available in order to use the :ref:`blacklist <blacklist>` app. This value is optional.
 
 
 ``DJWTO_ACCESS_TOKEN_LIFETIME``
@@ -73,7 +77,7 @@ Sets the NBF (Not Before) claim. It's expressed in ``timedelta`` object and the 
 ``DJWTO_SIGNING_KEY``
 ---------------------
 
-Secret key used for hashing the tokens.
+Secret key used for hashing the tokens. By default it expects to find its value in an environment variable called "DJWTO_SIGNING_KEY".
 
 ``DJWTO_VERIFYING_KEY``
 -----------------------

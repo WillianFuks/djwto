@@ -227,10 +227,14 @@ At some scenarios it may be interesting for the JWT auth process to also be able
   print(sess.cookies)
   <RequestsCookieJar[Cookie(name='csrftoken', value='Ti3rbJUrep'), Cookie(name='jwt_access', value='eyJ0eX.AiOiJK.V1Qi'), Cookie(name='jwt_refresh', value='eyJ0eXA.iOiJKV.1QiLC, path='/api/token/refresh')]>
 
+.. _blacklist:
+
 /logout/
 --------
 
-When logging a user out, if ``JTI`` is available then the tokens will be blacklisted. In either case, the tokens are deleted (both *access* and *refresh*). The request ``path`` must contain ``settings.DJWTO_REFRESH_COOKIE_PATH``. Here's an example for ``JSON`` mode:
+When logging a user out, if ``JTI`` is available then the tokens will be blacklisted, i.e., they won't be considered valid anymore despite its time expectancy still being valid. In either case, the tokens are deleted (both *access* and *refresh*).
+
+The request ``path`` must contain ``settings.DJWTO_REFRESH_COOKIE_PATH``. Here's an example for ``JSON`` mode:
 
 .. code-block::
 

@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 from datetime import timedelta
 
@@ -38,8 +39,8 @@ DJWTO_JTI_CLAIM = True
 
 DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(minutes=500)
 DJWTO_REFRESH_TOKEN_LIFETIME = timedelta(days=1)
-DJWTO_NBF_LIFETIME = None
-DJWTO_SIGNING_KEY = 'test key'
+DJWTO_NBF_LIFETIME = timedelta(minutes=0)
+DJWTO_SIGNING_KEY: str = os.environ['DJWTO_SIGNING_KEY']
 
 # Only set if Algorithm uses asymetrical signing.
 DJWTO_VERIFYING_KEY = None

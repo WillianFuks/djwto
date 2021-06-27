@@ -20,4 +20,28 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-DJWTO_AUTHENTICATOR = 'djwto.authenticate.default_user_authenticator'
+import os
+from datetime import timedelta
+from typing import List, Optional, Union
+
+from typing_extensions import Literal
+
+# Refence for each claim: https://tools.ietf.org/html/rfc7519#page-9
+DJWTO_ISS_CLAIM: Optional[str] = None
+DJWTO_SUB_CLAIM: Optional[str] = None
+DJWTO_AUD_CLAIM: Optional[Union[List[str], str]] = None
+DJWTO_IAT_CLAIM: bool = True
+DJWTO_JTI_CLAIM: bool = True
+DJWTO_ALLOW_REFRESH_UPDATE: bool = True
+
+DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(minutes=5)
+DJWTO_REFRESH_TOKEN_LIFETIME = timedelta(days=1)
+DJWTO_NBF_LIFETIME: Optional[timedelta] = timedelta(minutes=0)
+DJWTO_SIGNING_KEY: str = os.environ['DJWTO_SIGNING_KEY']
+# Only set if Algorithm uses asymetrical signing.
+DJWTO_VERIFYING_KEY: Optional[str] = None
+DJWTO_ALGORITHM: str = 'HS256'
+DJWTO_MODE: Literal['JSON', 'ONE-COOKIE', 'TWO-COOKIES'] = 'JSON'
+DJWTO_REFRESH_COOKIE_PATH: Optional[str] = '/api/token/refresh'
+DJWTO_SAME_SITE: Optional[str] = 'Lax'
+DJWTO_CSRF: bool = True
