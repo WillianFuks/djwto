@@ -1,2 +1,2 @@
-sslserver
+django-sslserver
 django
