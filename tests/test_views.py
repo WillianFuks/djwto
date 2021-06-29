@@ -32,10 +32,10 @@ import pytest
 from django.http.response import JsonResponse
 from django.middleware.csrf import get_token
 
+import djwto.settings as settings
 import djwto.signals as signals
 import djwto.tokens as tokens
 import djwto.views as views
-import djwto.settings as settings
 from djwto.authentication import WWWAUTHENTICATE
 from djwto.models import JWTBlacklist
 

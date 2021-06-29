@@ -22,9 +22,8 @@
 
 from django.urls import path
 
-from djwto import views
-
 import djwto.settings as settings
+from djwto import views
 
 urlpatterns = [
     path('login/', views.GetTokensView.as_view(), name='login'),
