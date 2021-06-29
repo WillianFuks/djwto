@@ -1,3 +1,4 @@
 pyjwt[crypto]
 sphinx==4.0.1
 sphinx_press_theme
+typing_extensions

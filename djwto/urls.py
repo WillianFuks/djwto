@@ -20,10 +20,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from django.conf import settings
 from django.urls import path
 
 from djwto import views
+
+import djwto.settings as settings
 
 urlpatterns = [
     path('login/', views.GetTokensView.as_view(), name='login'),

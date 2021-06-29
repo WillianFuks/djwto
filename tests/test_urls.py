@@ -27,6 +27,8 @@ import jwt as pyjwt
 import pytest
 from django.urls import reverse
 
+import djwto.settings as settings
+
 
 @pytest.mark.django_db
 class TestURLs:
@@ -39,7 +41,9 @@ class TestURLs:
         assert 'refresh' in data
         assert 'access' in data
 
-    def test_logout(self, client, settings):
+    def test_logout(self, client):
+        reload(settings)
+
         settings.DJWTO_MODE = 'ONE-COOKIE'
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_JTI_CLAIM = True
@@ -53,7 +57,9 @@ class TestURLs:
         assert r.status_code == 200
         assert r.content == b'{"msg": "Token successfully blacklisted."}'
 
-    def test_validate_access(self, client, settings):
+    def test_validate_access(self, client):
+        reload(settings)
+
         settings.DJWTO_MODE = 'ONE-COOKIE'
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_JTI_CLAIM = False
@@ -68,7 +74,9 @@ class TestURLs:
         assert r.status_code == 200
         assert r.content == b'{"msg": "Token is valid"}'
 
-    def test_validate_refresh(self, client, settings):
+    def test_validate_refresh(self, client):
+        reload(settings)
+
         settings.DJWTO_MODE = 'ONE-COOKIE'
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_JTI_CLAIM = False
@@ -83,7 +91,9 @@ class TestURLs:
         assert r.status_code == 200
         assert r.content == b'{"msg": "Token is valid"}'
 
-    def test_refresh_access(self, client, settings):
+    def test_refresh_access(self, client):
+        reload(settings)
+
         settings.DJWTO_MODE = 'ONE-COOKIE'
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_JTI_CLAIM = False
@@ -98,7 +108,9 @@ class TestURLs:
         assert r.status_code == 200
         assert r.content == b'{"msg": "Access token successfully refreshed."}'
 
-    def test_update_refresh(self, client, settings):
+    def test_update_refresh(self, client):
+        reload(settings)
+
         settings.DJWTO_MODE = 'ONE-COOKIE'
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_JTI_CLAIM = False
@@ -113,7 +125,9 @@ class TestURLs:
         assert r.status_code == 200
         assert r.content == b'{"msg": "Refresh token successfully updated."}'
 
-    def test_update_refresh_set_False(self, client, settings):
+    def test_update_refresh_set_False(self, client):
+        reload(settings)
+
         settings.DJWTO_MODE = 'ONE-COOKIE'
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_JTI_CLAIM = False

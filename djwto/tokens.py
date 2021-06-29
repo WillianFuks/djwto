@@ -27,12 +27,12 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 
 import jwt as pyjwt
-from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 
 import djwto.exceptions as exceptions
+import djwto.settings as settings
 
 
 def process_claims(

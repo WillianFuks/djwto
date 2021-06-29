@@ -35,6 +35,7 @@ from django.middleware.csrf import get_token
 import djwto.signals as signals
 import djwto.tokens as tokens
 import djwto.views as views
+import djwto.settings as settings
 from djwto.authentication import WWWAUTHENTICATE
 from djwto.models import JWTBlacklist
 
@@ -92,6 +93,7 @@ class TestGetTokensView:
     expected_refresh_jwt = pyjwt.encode(expected_refresh_claims, sign_key)
 
     def test_post_with_invalid_user_data(self, rf):
+        reload(settings)
         # Force a reload as djwto sets the code according to the values available in
         # `settings`, i.e., if CSRF protection is enabled then the methods are decorated
         # with specific functions.
@@ -118,7 +120,8 @@ class TestGetTokensView:
         assert response.status_code == 401
         assert response.headers['WWW-Authenticate'] == WWWAUTHENTICATE
 
-    def test_post_with_wrong_settings_raises(self, rf, settings):
+    def test_post_with_wrong_settings_raises(self, rf):
+        reload(settings)
         reload(views)
         from djwto.views import GetTokensView
 
@@ -197,9 +200,10 @@ class TestGetTokensView:
         )
         assert response.status_code == 500
 
-    def test_post_json_mode(self, rf, settings, monkeypatch):
+    def test_post_json_mode(self, rf, monkeypatch):
         # First set `settings.DJWTO_MODE` properly so when `GetTokensView` is imported
         # the `_build_decorator` uses the proper function
+        reload(settings)
         settings.DJWTO_MODE = 'JSON'
         reload(views)
         from djwto.views import GetTokensView
@@ -236,7 +240,8 @@ class TestGetTokensView:
         assert response.content == b'{"msg": "User already authenticated."}'
         assert response.status_code == 200
 
-    def test_post_json_mode_sends_signal_on_success(self, rf, settings, monkeypatch):
+    def test_post_json_mode_sends_signal_on_success(self, rf, monkeypatch):
+        reload(settings)
         # First set `settings.DJWTO_MODE` properly so when `GetTokensView` is imported
         # the `_build_decorator` uses the proper function
         settings.DJWTO_MODE = 'JSON'
@@ -263,6 +268,7 @@ class TestGetTokensView:
         assert call['sender'] == 'GetTokensView'
 
     def test_post_json_mode_sends_signal_on_failure(self, rf):
+        reload(settings)
         reload(views)
         from djwto.views import GetTokensView
 
@@ -278,7 +284,8 @@ class TestGetTokensView:
         assert call['sender'] == 'GetTokensView'
         assert '__all__' in call['error']
 
-    def test_post_json_mode_sends_signal_on_settings_failure(self, rf, settings):
+    def test_post_json_mode_sends_signal_on_settings_failure(self, rf):
+        reload(settings)
         reload(views)
         from djwto.views import GetTokensView
 
@@ -298,7 +305,8 @@ class TestGetTokensView:
             'Received "invalid" instead.'
         )
 
-    def test_post_one_cookie_mode_ensuring_csrf(self, rf, settings, monkeypatch):
+    def test_post_one_cookie_mode_ensuring_csrf(self, rf, monkeypatch):
+        reload(settings)
         settings.DJWTO_MODE = 'ONE-COOKIE'
         settings.DJWTO_CSRF = True
         reload(views)
@@ -359,7 +367,9 @@ class TestGetTokensView:
         assert response.content == b'{"msg": "User already authenticated."}'
         assert response.status_code == 200
 
-    def test_post_one_cookie_mode_not_ensuring_csrf(self, rf, settings, monkeypatch):
+    def test_post_one_cookie_mode_not_ensuring_csrf(self, rf, monkeypatch):
+        reload(settings)
+
         settings.DJWTO_MODE = 'ONE-COOKIE'
         settings.DJWTO_CSRF = False
         reload(views)
@@ -420,7 +430,9 @@ class TestGetTokensView:
         assert response.content == b'{"msg": "User already authenticated."}'
         assert response.status_code == 200
 
-    def test_post_two_cookies_mode_ensuring_csrf(self, rf, settings, monkeypatch):
+    def test_post_two_cookies_mode_ensuring_csrf(self, rf, monkeypatch):
+        reload(settings)
+
         settings.DJWTO_MODE = 'TWO-COOKIES'
         settings.DJWTO_CSRF = True
         reload(views)
@@ -507,7 +519,9 @@ class TestGetTokensView:
         assert response.content == b'{"msg": "User already authenticated."}'
         assert response.status_code == 200
 
-    def test_post_two_cookies_mode_not_ensuring_csrf(self, rf, settings, monkeypatch):
+    def test_post_two_cookies_mode_not_ensuring_csrf(self, rf, monkeypatch):
+        reload(settings)
+
         settings.DJWTO_MODE = 'TWO-COOKIES'
         settings.DJWTO_CSRF = False
         reload(views)
@@ -598,7 +612,8 @@ class TestGetTokensView:
 class TestBlacklistTokensView:
     sign_key = 'test'
 
-    def test_post_returns_error_response(self, rf, settings):
+    def test_post_returns_error_response(self, rf):
+        reload(settings)
         reload(views)
         from djwto.views import BlackListTokenView
 
@@ -667,7 +682,9 @@ class TestBlacklistTokensView:
         assert b'Forbidden' in response.content
         assert response.status_code == 403
 
-    def test_post_json_mode_with_csrf(self, rf, settings):
+    def test_post_json_mode_with_csrf(self, rf):
+        reload(settings)
+
         settings.DJWTO_MODE = 'JSON'
         settings.DJWTO_CSRF = True
         reload(views)
@@ -695,7 +712,9 @@ class TestBlacklistTokensView:
         exp_str = exp.strftime("%Y-%m-%d %H:%M:%S")
         assert obj.expires.strftime("%Y-%m-%d %H:%M:%S") == exp_str
 
-    def test_post_json_mode_with_csrf_sends_signal(self, rf, settings, monkeypatch):
+    def test_post_json_mode_with_csrf_sends_signal(self, rf, monkeypatch):
+        reload(settings)
+
         settings.DJWTO_MODE = 'JSON'
         settings.DJWTO_CSRF = True
         reload(views)
@@ -719,7 +738,9 @@ class TestBlacklistTokensView:
         assert list(call.keys()) == ['signal', 'sender', 'request', 'jti']
         assert call['sender'] == 'BlackListTokenView'
 
-    def test_delete_json_mode_with_csrf(self, rf, settings):
+    def test_delete_json_mode_with_csrf(self, rf):
+        reload(settings)
+
         settings.DJWTO_MODE = 'JSON'
         settings.DJWTO_CSRF = True
         reload(views)
@@ -739,7 +760,9 @@ class TestBlacklistTokensView:
         )
         assert response.status_code == 204
 
-    def test_post_json_mode_without_csrf(self, rf, settings):
+    def test_post_json_mode_without_csrf(self, rf):
+        reload(settings)
+
         settings.DJWTO_MODE = 'JSON'
         settings.DJWTO_CSRF = False
         reload(views)
@@ -767,7 +790,9 @@ class TestBlacklistTokensView:
         exp_str = exp.strftime("%Y-%m-%d %H:%M:%S")
         assert obj.expires.strftime("%Y-%m-%d %H:%M:%S") == exp_str
 
-    def test_post_one_cookie_mode_with_csrf(self, rf, settings):
+    def test_post_one_cookie_mode_with_csrf(self, rf):
+        reload(settings)
+
         settings.DJWTO_MODE = 'ONE-COOKIE'
         settings.DJWTO_CSRF = True
         reload(views)
@@ -796,7 +821,9 @@ class TestBlacklistTokensView:
         assert obj.token == expected_jwt
         assert obj.expires is None
 
-    def test_delete_one_cookie_mode_with_csrf(self, rf, settings):
+    def test_delete_one_cookie_mode_with_csrf(self, rf):
+        reload(settings)
+
         settings.DJWTO_MODE = 'ONE-COOKIE'
         settings.DJWTO_CSRF = True
         settings.DJWTO_IAT_CLAIM = False
@@ -823,7 +850,9 @@ class TestBlacklistTokensView:
         assert 'Max-Age=0' in str(response.cookies['jwt_refresh'])
         assert 'Max-Age=0' in str(response.cookies['jwt_access'])
 
-    def test_post_one_cookie_mode_without_csrf(self, rf, settings):
+    def test_post_one_cookie_mode_without_csrf(self, rf):
+        reload(settings)
+
         settings.DJWTO_MODE = 'ONE-COOKIE'
         settings.DJWTO_CSRF = False
         reload(views)
@@ -849,7 +878,9 @@ class TestBlacklistTokensView:
         assert obj.token == expected_jwt
         assert obj.expires is None
 
-    def test_post_two_cookies_mode_with_csrf(self, rf, settings):
+    def test_post_two_cookies_mode_with_csrf(self, rf):
+        reload(settings)
+
         settings.DJWTO_MODE = 'TWO-COOKIES'
         settings.DJWTO_CSRF = True
         reload(views)
@@ -880,7 +911,9 @@ class TestBlacklistTokensView:
         assert obj.token == expected_jwt
         assert obj.expires is None
 
-    def test_delete_two_cookies_mode_with_csrf(self, rf, settings):
+    def test_delete_two_cookies_mode_with_csrf(self, rf):
+        reload(settings)
+
         settings.DJWTO_MODE = 'TWO-COOKIES'
         settings.DJWTO_CSRF = True
         reload(views)
@@ -909,7 +942,9 @@ class TestBlacklistTokensView:
         assert 'Max-Age=0' in str(response.cookies['jwt_access_payload'])
         assert 'Max-Age=0' in str(response.cookies['jwt_access_token'])
 
-    def test_post_two_cookies_mode_without_csrf(self, rf, settings):
+    def test_post_two_cookies_mode_without_csrf(self, rf):
+        reload(settings)
+
         settings.DJWTO_MODE = 'TWO-COOKIES'
         settings.DJWTO_CSRF = False
         reload(views)
@@ -942,7 +977,8 @@ class TestBlacklistTokensView:
 class TestValidateTokensView:
     sign_key = 'test'
 
-    def test_post_returns_error_response(self, rf, settings):
+    def test_post_returns_error_response(self, rf):
+        reload(settings)
         reload(views)
         from djwto.views import ValidateTokensView
 
@@ -1004,7 +1040,8 @@ class TestValidateTokensView:
         assert response.content == b'{"error": "Signature has expired"}'
         assert response.status_code == 403
 
-    def test_post(self, rf, settings):
+    def test_post(self, rf):
+        reload(settings)
         reload(views)
         from djwto.views import ValidateTokensView
 
@@ -1073,7 +1110,8 @@ class TestValidateTokensView:
         )
         assert response.status_code == 200
 
-    def test_post_sends_signal(self, rf, settings):
+    def test_post_sends_signal(self, rf):
+        reload(settings)
         reload(views)
         from djwto.views import ValidateTokensView
 
@@ -1101,7 +1139,9 @@ class TestValidateTokensView:
 class TestRefreshAccessView:
     sign_key = 'test'
 
-    def test_post_returns_error_response(self, rf, settings):
+    def test_post_returns_error_response(self, rf):
+        reload(settings)
+
         # Test view is protected by CSRF
         settings.DJWTO_CSRF = True
         settings.DJWTO_MODE = 'ONE-COOKIE'
@@ -1152,7 +1192,8 @@ class TestRefreshAccessView:
         assert response.content == b'{"error": "Can\'t update access token."}'
         assert response.status_code == 500
 
-    def test_post(self, rf, settings, monkeypatch, date_mock):
+    def test_post(self, rf, monkeypatch, date_mock):
+        reload(settings)
         reload(views)
         from djwto.views import RefreshAccessView
 
@@ -1256,7 +1297,8 @@ class TestRefreshAccessView:
         assert response.content == b'{}'
         assert response.status_code == 200
 
-    def test_post_sends_signal(self, rf, settings, monkeypatch, date_mock):
+    def test_post_sends_signal(self, rf, monkeypatch, date_mock):
+        reload(settings)
         reload(views)
         from djwto.views import RefreshAccessView
 
@@ -1288,7 +1330,9 @@ class TestRefreshAccessView:
 class TestUpdateRefreshView:
     sign_key = 'test'
 
-    def test_post_returns_error_response(self, rf, settings):
+    def test_post_returns_error_response(self, rf):
+        reload(settings)
+
         # Test view is protected by CSRF
         settings.DJWTO_CSRF = True
         settings.DJWTO_MODE = 'ONE-COOKIE'
@@ -1322,7 +1366,8 @@ class TestUpdateRefreshView:
         assert response.content == b'{"error": "Signature has expired"}'
         assert response.status_code == 403
 
-    def test_post_settings_refresh_update(self, rf, settings, monkeypatch):
+    def test_post_settings_refresh_update(self, rf, monkeypatch):
+        reload(settings)
         reload(views)
         from djwto.views import UpdateRefreshView
 
@@ -1351,7 +1396,8 @@ class TestUpdateRefreshView:
         assert response.content == b'{"error": "Can\'t update refresh token."}'
         assert response.status_code == 500
 
-    def test_post_sends_signal(self, rf, settings, monkeypatch):
+    def test_post_sends_signal(self, rf, monkeypatch):
+        reload(settings)
         reload(views)
         from djwto.views import UpdateRefreshView
 
@@ -1379,7 +1425,8 @@ class TestUpdateRefreshView:
                                      'access_claims']
         assert call['sender'] == 'UpdateRefreshView'
 
-    def test_post_blacklist_jti(self, rf, settings, monkeypatch, date_mock):
+    def test_post_blacklist_jti(self, rf, monkeypatch, date_mock):
+        reload(settings)
         reload(views)
         from djwto.views import UpdateRefreshView
 
@@ -1449,7 +1496,8 @@ class TestUpdateRefreshView:
         _ = UpdateRefreshView.as_view()(request)
         build_mock.assert_any_call(expected_payload, expected_access_payload, msg)
 
-    def test_post_user_errors(self, rf, settings, monkeypatch, date_mock):
+    def test_post_user_errors(self, rf, monkeypatch, date_mock):
+        reload(settings)
         reload(views)
         from djwto.views import UpdateRefreshView
 

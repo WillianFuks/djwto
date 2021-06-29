@@ -29,12 +29,13 @@ import pytest
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
 
+import djwto.settings as settings
 import djwto.tokens as tokens
 from djwto.exceptions import JWTValidationError
 
 
 class TestProcessClaims:
-    def test_process_claims_raises(self, settings, rf):
+    def test_process_claims_raises(self, rf):
         alice = None
         settings.DJWTO_ISS_CLAIM = 1
         request = rf.post('')
@@ -83,7 +84,7 @@ class TestProcessClaims:
         )
 
     @pytest.mark.django_db
-    def test_process_claims(self, settings, rf, monkeypatch, date_mock):
+    def test_process_claims(self, rf, monkeypatch, date_mock):
         d_mock = mock.Mock()
         uuid_mock = mock.Mock()
 
@@ -129,7 +130,7 @@ class TestProcessClaims:
 
 
 class TestGetAccessClaimsFromRefresh:
-    def test_get_access_from_refresh_raises(self, settings):
+    def test_get_access_from_refresh_raises(self):
         settings.DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(seconds=-1)
         settings.DJWTO_IAT_CLAIM = False
         with pytest.raises(ImproperlyConfigured) as exec_info:
@@ -145,7 +146,7 @@ class TestGetAccessClaimsFromRefresh:
             'Refresh token lifetime must be a `timedelta` object.'
         )
 
-    def test_get_access_from_refresh(self, settings, monkeypatch, date_mock):
+    def test_get_access_from_refresh(self, monkeypatch, date_mock):
         claims = {'sub': 'sub'}
         settings.DJWTO_ACCESS_TOKEN_LIFETIME = None
         settings.DJWTO_IAT_CLAIM = False
@@ -172,7 +173,7 @@ class TestGetAccessClaimsFromRefresh:
 
 
 class TestEncodeClaims:
-    def test_encode_claims(self, settings):
+    def test_encode_claims(self):
         claims = {'sub': 'sub'}
         expected = pyjwt.encode(claims, 'test key')
         jwt = tokens.encode_claims(claims)
@@ -180,7 +181,7 @@ class TestEncodeClaims:
 
 
 class TestDecodeToken:
-    def test_decode_token_raises(self, settings):
+    def test_decode_token_raises(self):
         sign_key = 'sign key'
         settings.DJWTO_SIGNING_KEY = sign_key
         settings.DJWTO_VERIFYING_KEY = None
@@ -256,7 +257,7 @@ class TestDecodeToken:
             _ = tokens.decode_token(token)
         assert exec_info.value.args[0] == 'Token is missing the "jti" claim'
 
-    def test_decode_token(self, settings):
+    def test_decode_token(self):
         sign_key = 'sign key'
         settings.DJWTO_SIGNING_KEY = sign_key
         settings.DJWTO_VERIFYING_KEY = None

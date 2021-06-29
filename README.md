@@ -150,31 +150,33 @@ Notice the access token now have two components: payload and the token itself. T
 Here's an overview of all settings available for djwto:
 
 ```python
+DJWTO_ISS_CLAIM: Optional[str] = getattr(settings, 'DJWTO_ISS_CLAIM', None)
+DJWTO_SUB_CLAIM: Optional[str] = getattr(settings, 'DJWTO_SUB_CLAIM', None)
+DJWTO_AUD_CLAIM: Optional[Union[List[str], str]] = getattr(settings, 'DJWTO_AUD_CLAIM', None)
 
-    import os
-    from datetime import timedelta
+DJWTO_IAT_CLAIM: bool = getattr(settings, 'DJWTO_IAT_CLAIM', True)
+DJWTO_JTI_CLAIM: bool = getattr(settings, 'DJWTO_JTI_CLAIM', True)
 
+DJWTO_ALLOW_REFRESH_UPDATE: bool = getattr(settings, 'DJWTO_ALLOW_REFRESH_UPDATE', True)
 
-    DJWTO_ISS_CLAIM = 'iss'
-    DJWTO_SUB_CLAIM = 'sub'
-    DJWTO_AUD_CLAIM = 'aud'
-    DJWTO_IAT_CLAIM = True
-    DJWTO_JTI_CLAIM = True
+DJWTO_ACCESS_TOKEN_LIFETIME = getattr(settings, 'DJWTO_ACCESS_TOKEN_LIFETIME', timedelta(minutes=5))
+DJWTO_REFRESH_TOKEN_LIFETIME = getattr(settings, 'DJWTO_REFRESH_TOKEN_LIFETIME', timedelta(days=1))
+DJWTO_NBF_LIFETIME: Optional[timedelta] = getattr(settings, 'DJWTO_NBF_LIFETIME', timedelta(minutes=0))
 
-    DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(minutes=5)
-    DJWTO_REFRESH_TOKEN_LIFETIME = timedelta(days=1)
-    DJWTO_NBF_LIFETIME = timedelta(minutes=0)
-    DJWTO_SIGNING_KEY = os.environ['DJWTO_SIGNING_KEY']
+DJWTO_SIGNING_KEY: str = getattr(settings, 'DJWTO_SIGNING_KEY', os.environ['DJWTO_SIGNING_KEY'])
 
-    # Only set if Algorithm uses asymetrical signing.
-    DJWTO_VERIFYING_KEY: = None
+# Only set if Algorithm uses asymetrical signing.
+DJWTO_VERIFYING_KEY: Optional[str] = getattr(settings, 'DJWTO_VERIFYING_KEY', None)
 
-    DJWTO_ALGORITHM = 'HS256'
-    DJWTO_MODE = 'JSON'
-    DJWTO_REFRESH_COOKIE_PATH = '/api/token/refresh'
-    DJWTO_SAME_SITE = 'Lax'
-    DJWTO_CSRF = True
-    DJWTO_ALLOW_REFRESH_UPDATE = True
+DJWTO_ALGORITHM: str = getattr(settings, 'DJWTO_ALGORITHM', 'HS256')
+
+DJWTO_MODE: Literal['JSON', 'ONE-COOKIE', 'TWO-COOKIES'] = getattr(settings, 'DJWTO_MODE', 'JSON')
+
+DJWTO_REFRESH_COOKIE_PATH: str = getattr(settings, 'DJWTO_REFRESH_COOKIE_PATH', 'api/token/refresh')
+
+DJWTO_SAME_SITE: str = getattr(settings, 'DJWTO_SAME_SITE', 'Lax')
+
+DJWTO_CSRF: bool = getattr(settings, 'DJWTO_CSRF', True)
 ```
 
 For a thorough view of each please refer to the official [docs](https://djwto.readthedocs.io/en/latest/?).

@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 from datetime import datetime, timedelta
+from importlib import reload
 
 import jwt as pyjwt
 import mock
@@ -31,6 +32,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 
 import djwto.authentication as auth
+import djwto.settings as settings
 from djwto.exceptions import JWTValidationError
 
 
@@ -53,8 +55,6 @@ class MockJWTRefreshRequiredView(View):
         return super().dispatch(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
-        from django.conf import settings
-
         assert request.token is not None
         assert request.payload is not None
         assert request.payload['type'] == 'refresh'
@@ -89,7 +89,9 @@ class MockJWTPermsRequiredViewWithoutLogin(View):
 class TestJWTPermsRequired:
     sign_key = 'test'
 
-    def test_post_fails_with_perms_required(self, rf, settings):
+    def test_post_fails_with_perms_required(self, rf):
+        reload(settings)
+
         # JSON Mode
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_JTI_CLAIM = False
@@ -136,7 +138,9 @@ class TestJWTPermsRequired:
             b'{"error": "Login must happen before evaluating permissions."}'
         )
 
-    def test_post_with_perms_required(self, rf, settings):
+    def test_post_with_perms_required(self, rf):
+        reload(settings)
+
         # JSON Mode
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_JTI_CLAIM = False
@@ -159,7 +163,9 @@ class TestJWTPermsRequired:
 class TestJWTRefreshRequired:
     sign_key = 'test'
 
-    def test_post_fails_with_refresh_required(self, rf, settings):
+    def test_post_fails_with_refresh_required(self, rf):
+        reload(settings)
+
         # First test JSON Mode
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_JTI_CLAIM = False
@@ -223,7 +229,9 @@ class TestJWTRefreshRequired:
             b'{"error": "POST variable \\"jwt_type\\" must be equal to \\"refresh\\"."}'
         )
 
-    def test_post_with_refresh_required(self, rf, settings):
+    def test_post_with_refresh_required(self, rf):
+        reload(settings)
+
         # First test JSON Mode
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_JTI_CLAIM = False
@@ -281,7 +289,9 @@ class TestJWTRefreshRequired:
 class TestJWTLoginRequired:
     sign_key = 'test'
 
-    def test_post_fails_with_login_required(self, rf, settings):
+    def test_post_fails_with_login_required(self, rf):
+        reload(settings)
+
         request = rf.post('/api/tokens')
         response = MockJWTLoginView.as_view()(request)
         assert response.content == (
@@ -334,7 +344,9 @@ class TestJWTLoginRequired:
             b'{"error": "Cookie \\"jwt_refresh\\" cannot be empty."}'
         )
 
-    def test_post_with_login_required(self, rf, settings):
+    def test_post_with_login_required(self, rf):
+        reload(settings)
+
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_JTI_CLAIM = False
         settings.DJWTO_SIGNING_KEY = self.sign_key
@@ -354,7 +366,6 @@ class TestJWTLoginRequired:
         request = rf.post('/api/tokens')
         request.META['HTTP_AUTHORIZATION'] = f'Authorization: Bearer {expected_jwt}'
         response = MockJWTLoginView.as_view()(request)
-        print(response.content)
         assert response.content == (
             b'{"msg": "worked"}'
         )
@@ -396,7 +407,6 @@ class TestJWTLoginRequired:
         rf.cookies['jwt_access_token'] = expected_jwt
         request = rf.post('/api/tokens')
         response = MockJWTLoginView.as_view()(request)
-        print(response.content)
         assert response.content == (
             b'{"error": "Failed to validate token."}'
         )
@@ -438,7 +448,9 @@ class TestUserAuthenticate:
 
 
 class TestGetRawTokenFromRequest:
-    def test_get_raw_token_from_request_raises(self, rf, settings):
+    def test_get_raw_token_from_request_raises(self, rf):
+        reload(settings)
+
         request = rf.post('')
         with pytest.raises(JWTValidationError) as exec_info:
             _ = auth.get_raw_token_from_request(request)
@@ -491,7 +503,7 @@ class TestGetRawTokenFromRequest:
             '"invalid type" instead.'
         )
 
-        settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
+        settings.DJWTO_REFRESH_COOKIE_PATH = 'api/tokens/refresh'
         settings.DJWTO_MODE = 'TWO-COOKIES'
         request = rf.post('', {'jwt_type': 'refresh'})
         with pytest.raises(JWTValidationError) as exec_info:
@@ -501,7 +513,9 @@ class TestGetRawTokenFromRequest:
             'Requested path was: /.'
         )
 
-    def test_get_raw_token_from_request(self, rf, settings):
+    def test_get_raw_token_from_request(self, rf):
+        reload(settings)
+
         request = rf.post('')
         expected = 'abc.def.ghi'
         request.META['HTTP_AUTHORIZATION'] = 'Authorization: Bearer abc.def.ghi'
