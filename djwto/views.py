@@ -29,7 +29,6 @@ from calendar import timegm
 from datetime import datetime
 from typing import Any, Callable, Dict
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
@@ -43,6 +42,7 @@ from django.views.decorators.csrf import (csrf_exempt, csrf_protect,
 
 import djwto.authentication as auth
 import djwto.models as models
+import djwto.settings as settings
 import djwto.signals as signals
 import djwto.tokens as tokens
 from djwto.exceptions import JWTValidationError

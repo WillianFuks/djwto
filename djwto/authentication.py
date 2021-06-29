@@ -25,13 +25,13 @@ import json
 from functools import wraps
 from typing import Any, Callable, Dict, List, Tuple
 
-from django.conf import settings
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.http.request import HttpRequest
 from django.http.response import JsonResponse
 
+import djwto.settings as settings
 import djwto.tokens as tokens
 from djwto.exceptions import JWTValidationError
 
@@ -306,7 +306,7 @@ def get_raw_token_from_request(request: HttpRequest) -> str:
             ):
                 raise JWTValidationError(
                     'Refresh cookie is only sent in path '
-                    f'"{settings.DJWTO_REFRESH_COOKIE_PATH}". Requested path was: '
+                    f'"/{settings.DJWTO_REFRESH_COOKIE_PATH}". Requested path was: '
                     f'{request.path}.'
                 )
             raise JWTValidationError(f'Cookie "jwt_{type_}" cannot be empty.')

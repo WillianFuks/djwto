@@ -20,9 +20,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from django.conf import settings
 from django.urls import path
 
+import djwto.settings as settings
 from djwto import views
 
 urlpatterns = [

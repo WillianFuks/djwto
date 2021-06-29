@@ -24,24 +24,41 @@ import os
 from datetime import timedelta
 from typing import List, Optional, Union
 
+from django.conf import settings
 from typing_extensions import Literal
 
 # Refence for each claim: https://tools.ietf.org/html/rfc7519#page-9
-DJWTO_ISS_CLAIM: Optional[str] = None
-DJWTO_SUB_CLAIM: Optional[str] = None
-DJWTO_AUD_CLAIM: Optional[Union[List[str], str]] = None
-DJWTO_IAT_CLAIM: bool = True
-DJWTO_JTI_CLAIM: bool = True
-DJWTO_ALLOW_REFRESH_UPDATE: bool = True
+DJWTO_ISS_CLAIM: Optional[str] = getattr(settings, 'DJWTO_ISS_CLAIM', None)
+DJWTO_SUB_CLAIM: Optional[str] = getattr(settings, 'DJWTO_SUB_CLAIM', None)
+DJWTO_AUD_CLAIM: Optional[Union[List[str], str]] = getattr(settings, 'DJWTO_AUD_CLAIM',
+                                                           None)
 
-DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(minutes=5)
-DJWTO_REFRESH_TOKEN_LIFETIME = timedelta(days=1)
-DJWTO_NBF_LIFETIME: Optional[timedelta] = timedelta(minutes=0)
-DJWTO_SIGNING_KEY: str = os.environ['DJWTO_SIGNING_KEY']
+DJWTO_IAT_CLAIM: bool = getattr(settings, 'DJWTO_IAT_CLAIM', True)
+DJWTO_JTI_CLAIM: bool = getattr(settings, 'DJWTO_JTI_CLAIM', True)
+
+DJWTO_ALLOW_REFRESH_UPDATE: bool = getattr(settings, 'DJWTO_ALLOW_REFRESH_UPDATE', True)
+
+DJWTO_ACCESS_TOKEN_LIFETIME = getattr(settings, 'DJWTO_ACCESS_TOKEN_LIFETIME',
+                                      timedelta(minutes=5))
+DJWTO_REFRESH_TOKEN_LIFETIME = getattr(settings, 'DJWTO_REFRESH_TOKEN_LIFETIME',
+                                       timedelta(days=1))
+DJWTO_NBF_LIFETIME: Optional[timedelta] = getattr(settings, 'DJWTO_NBF_LIFETIME',
+                                                  timedelta(minutes=0))
+
+DJWTO_SIGNING_KEY: str = getattr(settings, 'DJWTO_SIGNING_KEY',
+                                 os.environ['DJWTO_SIGNING_KEY'])
+
 # Only set if Algorithm uses asymetrical signing.
-DJWTO_VERIFYING_KEY: Optional[str] = None
-DJWTO_ALGORITHM: str = 'HS256'
-DJWTO_MODE: Literal['JSON', 'ONE-COOKIE', 'TWO-COOKIES'] = 'JSON'
-DJWTO_REFRESH_COOKIE_PATH: Optional[str] = '/api/token/refresh'
-DJWTO_SAME_SITE: Optional[str] = 'Lax'
-DJWTO_CSRF: bool = True
+DJWTO_VERIFYING_KEY: Optional[str] = getattr(settings, 'DJWTO_VERIFYING_KEY', None)
+
+DJWTO_ALGORITHM: str = getattr(settings, 'DJWTO_ALGORITHM', 'HS256')
+
+DJWTO_MODE: Literal['JSON', 'ONE-COOKIE', 'TWO-COOKIES'] = getattr(settings,
+                                                                   'DJWTO_MODE', 'JSON')
+
+DJWTO_REFRESH_COOKIE_PATH: str = getattr(settings, 'DJWTO_REFRESH_COOKIE_PATH',
+                                                   'api/token/refresh')
+
+DJWTO_SAME_SITE: str = getattr(settings, 'DJWTO_SAME_SITE', 'Lax')
+
+DJWTO_CSRF: bool = getattr(settings, 'DJWTO_CSRF', True)
