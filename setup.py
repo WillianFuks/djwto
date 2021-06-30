@@ -33,7 +33,8 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 install_requires = [
     'Django',
-    'pyjwt[crypto]'
+    'pyjwt[crypto]',
+    'typing_extensions'
 ]
 tests_require = [
     'tox'

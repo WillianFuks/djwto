@@ -78,6 +78,10 @@ Sometimes the frontend may want to confirm whether a given token is still valid 
 
   sess = requests.Session()
   sess.verify = False  # For testing locally
+
+  r = sess.post('https://localhost:8001/login/',
+                data={'username': 'alice', 'password': 'pass'})
+
   sess.headers.update({'AUTHORIZATION': f'Bearer {r.json()["access"]}'})
 
   r = sess.post('https://localhost:8001/validate_access/')

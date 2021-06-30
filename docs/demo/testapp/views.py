@@ -1,4 +1,4 @@
-import djwto.authentication as auth # type: ignore
+import djwto.authentication as auth  # type: ignore
 from django.views import View
 from django.utils.decorators import method_decorator
 from django.http.response import HttpResponse
