@@ -835,7 +835,7 @@ class TestBlacklistTokensView:
         assert obj.token == expected_jwt
         assert obj.expires is None
 
-    def test_delete_one_cookie_mode_with_csrf(self, rf):
+    def test_delete_one_cookie_mode_with_csrf(self, rf, monkeypatch):
         reload(settings)
 
         settings.DJWTO_MODE = 'ONE-COOKIE'
@@ -845,7 +845,7 @@ class TestBlacklistTokensView:
         reload(views)
         from djwto.views import BlackListTokenView
 
-        settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
+        settings.DJWTO_REFRESH_COOKIE_PATH = 'api/tokens/refresh'
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_SIGNING_KEY = self.sign_key
         expected_payload = {'user': {'username': 'alice', 'id': 1}}
@@ -863,6 +863,21 @@ class TestBlacklistTokensView:
         assert response.status_code == 200
         assert 'Max-Age=0' in str(response.cookies['jwt_refresh'])
         assert 'Max-Age=0' in str(response.cookies['jwt_access'])
+
+        settings.DJWTO_DOMAIN = '.test-domain.com'
+        settings.DJWTO_SAME_SITE = 'None'
+
+        resp_mock = mock.Mock()
+        monkeypatch.setattr('djwto.views.JsonResponse', resp_mock)
+        _ = BlackListTokenView.as_view()(request)
+        resp_mock.return_value.delete_cookie.assert_any_call(
+            'jwt_access', domain='.test-domain.com', samesite='None'
+        )
+        resp_mock.return_value.delete_cookie.assert_any_call(
+            'jwt_refresh', path='/api/tokens/refresh', domain='.test-domain.com',
+            samesite='None'
+        )
+        assert resp_mock.return_value.delete_cookie.call_count == 2
 
     def test_post_one_cookie_mode_without_csrf(self, rf):
         reload(settings)
@@ -925,7 +940,7 @@ class TestBlacklistTokensView:
         assert obj.token == expected_jwt
         assert obj.expires is None
 
-    def test_delete_two_cookies_mode_with_csrf(self, rf):
+    def test_delete_two_cookies_mode_with_csrf(self, rf, monkeypatch):
         reload(settings)
 
         settings.DJWTO_MODE = 'TWO-COOKIES'
@@ -933,7 +948,7 @@ class TestBlacklistTokensView:
         reload(views)
         from djwto.views import BlackListTokenView
 
-        settings.DJWTO_REFRESH_COOKIE_PATH = '/api/tokens/refresh'
+        settings.DJWTO_REFRESH_COOKIE_PATH = 'api/tokens/refresh'
         settings.DJWTO_IAT_CLAIM = False
         settings.DJWTO_JTI_CLAIM = False
         settings.DJWTO_SIGNING_KEY = self.sign_key
@@ -955,6 +970,24 @@ class TestBlacklistTokensView:
         assert 'Max-Age=0' in str(response.cookies['jwt_refresh'])
         assert 'Max-Age=0' in str(response.cookies['jwt_access_payload'])
         assert 'Max-Age=0' in str(response.cookies['jwt_access_token'])
+
+        settings.DJWTO_DOMAIN = '.test-domain.com'
+        settings.DJWTO_SAME_SITE = 'None'
+
+        resp_mock = mock.Mock()
+        monkeypatch.setattr('djwto.views.JsonResponse', resp_mock)
+        _ = BlackListTokenView.as_view()(request)
+        resp_mock.return_value.delete_cookie.assert_any_call(
+            'jwt_access_payload', domain='.test-domain.com', samesite='None'
+        )
+        resp_mock.return_value.delete_cookie.assert_any_call(
+            'jwt_access_token', domain='.test-domain.com', samesite='None'
+        )
+        resp_mock.return_value.delete_cookie.assert_any_call(
+            'jwt_refresh', path='/api/tokens/refresh', domain='.test-domain.com',
+            samesite='None'
+        )
+        assert resp_mock.return_value.delete_cookie.call_count == 3
 
     def test_post_two_cookies_mode_without_csrf(self, rf):
         reload(settings)

@@ -485,22 +485,26 @@ class BlackListTokenView(View):
         response.delete_cookie(
             'jwt_refresh',
             path=f'/{settings.DJWTO_REFRESH_COOKIE_PATH}',
-            domain=settings.DJWTO_DOMAIN
+            domain=settings.DJWTO_DOMAIN,
+            samesite=settings.DJWTO_SAME_SITE
         )
 
         if settings.DJWTO_MODE == 'ONE-COOKIE':
             response.delete_cookie(
                 'jwt_access',
-                domain=settings.DJWTO_DOMAIN
+                domain=settings.DJWTO_DOMAIN,
+                samesite=settings.DJWTO_SAME_SITE
             )
 
         if settings.DJWTO_MODE == 'TWO-COOKIES':
             response.delete_cookie(
                 'jwt_access_payload',
-                domain=settings.DJWTO_DOMAIN
+                domain=settings.DJWTO_DOMAIN,
+                samesite=settings.DJWTO_SAME_SITE
             )
             response.delete_cookie(
                 'jwt_access_token',
-                domain=settings.DJWTO_DOMAIN
+                domain=settings.DJWTO_DOMAIN,
+                samesite=settings.DJWTO_SAME_SITE
             )
         return response
