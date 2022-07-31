@@ -156,7 +156,8 @@ def build_tokens_response(
         httponly=True,
         secure=True,
         path=f'/{settings.DJWTO_REFRESH_COOKIE_PATH}',
-        samesite=settings.DJWTO_SAME_SITE
+        samesite=settings.DJWTO_SAME_SITE,
+        domain=settings.DJWTO_DOMAIN
     )
     if mode == 'ONE-COOKIE':
         response.set_cookie(
@@ -165,7 +166,8 @@ def build_tokens_response(
             max_age=max_age_access,
             httponly=True,
             secure=True,
-            samesite=settings.DJWTO_SAME_SITE
+            samesite=settings.DJWTO_SAME_SITE,
+            domain=settings.DJWTO_DOMAIN
         )
         return response
     if mode == 'TWO-COOKIES':
@@ -178,7 +180,8 @@ def build_tokens_response(
             max_age=max_age_access,
             httponly=False,
             secure=True,
-            samesite=settings.DJWTO_SAME_SITE
+            samesite=settings.DJWTO_SAME_SITE,
+            domain=settings.DJWTO_DOMAIN
         )
         response.set_cookie(
             'jwt_access_token',
@@ -186,7 +189,8 @@ def build_tokens_response(
             max_age=max_age_access,
             httponly=True,
             secure=True,
-            samesite=settings.DJWTO_SAME_SITE
+            samesite=settings.DJWTO_SAME_SITE,
+            domain=settings.DJWTO_DOMAIN
         )
         return response
     raise ImproperlyConfigured(
@@ -480,13 +484,23 @@ class BlackListTokenView(View):
         response = JsonResponse({'msg': 'Tokens successfully deleted.'})
         response.delete_cookie(
             'jwt_refresh',
-            path=f'/{settings.DJWTO_REFRESH_COOKIE_PATH}'
+            path=f'/{settings.DJWTO_REFRESH_COOKIE_PATH}',
+            domain=settings.DJWTO_DOMAIN
         )
 
         if settings.DJWTO_MODE == 'ONE-COOKIE':
-            response.delete_cookie('jwt_access')
+            response.delete_cookie(
+                'jwt_access',
+                domain=settings.DJWTO_DOMAIN
+            )
 
         if settings.DJWTO_MODE == 'TWO-COOKIES':
-            response.delete_cookie('jwt_access_payload')
-            response.delete_cookie('jwt_access_token')
+            response.delete_cookie(
+                'jwt_access_payload',
+                domain=settings.DJWTO_DOMAIN
+            )
+            response.delete_cookie(
+                'jwt_access_token',
+                domain=settings.DJWTO_DOMAIN
+            )
         return response

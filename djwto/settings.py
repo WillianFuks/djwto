@@ -60,5 +60,5 @@ DJWTO_REFRESH_COOKIE_PATH: str = getattr(settings, 'DJWTO_REFRESH_COOKIE_PATH',
                                                    'api/token/refresh')
 
 DJWTO_SAME_SITE: str = getattr(settings, 'DJWTO_SAME_SITE', 'Lax')
-
+DJWTO_DOMAIN: Optional[str] = getattr(settings, 'DJWTO_DOMAIN', None)
 DJWTO_CSRF: bool = getattr(settings, 'DJWTO_CSRF', True)
