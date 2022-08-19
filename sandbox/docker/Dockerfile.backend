@@ -1,0 +1,24 @@
+FROM python:3.9-slim
+
+ARG APP_PATH=/app/
+
+ENV DJWTO_SIGNING_KEY="test key"
+ENV SQLITE3_DB_PATH="/db"
+
+WORKDIR ${APP_PATH}
+
+RUN mkdir -p /djwto/djwto
+
+COPY --chmod=0444 sandbox/backend/ ${APP_PATH}
+COPY --chmod=0444 setup.py requirements.txt README.md /djwto
+COPY --chmod=0444 djwto /djwto/djwto
+
+
+RUN set -xe; \
+  pip install -r requirements.txt; \
+  pip install -e /djwto; \
+  python manage.py makemigrations; \
+  python manage.py migrate; \
+  export PYTHONPATH=${APP_PATH} && python bin/add_default_users.py
+
+ENTRYPOINT ["python", "manage.py", "runsslserver", "0.0.0.0:8002"]

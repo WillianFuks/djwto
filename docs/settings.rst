@@ -31,6 +31,7 @@ Here is an example of all the options available for setting how **djwto** runs b
   DJWTO_REFRESH_COOKIE_PATH: str = getattr(settings, 'DJWTO_REFRESH_COOKIE_PATH', 'api/token/refresh')
 
   DJWTO_SAME_SITE: str = getattr(settings, 'DJWTO_SAME_SITE', 'Lax')
+  DJWTO_DOMAIN: Optional[str] = getattr(settings, 'DJWTO_DOMAIN', None)
 
   DJWTO_CSRF: bool = getattr(settings, 'DJWTO_CSRF', True)
 
@@ -110,6 +111,11 @@ Sets the ``path`` for the refresh cookie. This is used to increase security of t
 -------------------
 
 Sets ``same_site`` field of the tokens cookies. Default value is ``'LAX'``.
+
+``DJWTO_DOMAIN``
+-------------------
+
+Sets the domain of the cookies returned to the client. This is useful when working on cross-domain scenarios. For instance, suppose the frontend is running at `web.example.com` and the Django backend where `djwto` is installed is at `api.example.com`. Without setting a proper domain the cookies would be unreachable at the front. But choosing ``DJWTO_DOMAIN = 'example.com'`` would suffice for the front to be able to read the cookies.
 
 ``DJWTO_CSRF``
 --------------

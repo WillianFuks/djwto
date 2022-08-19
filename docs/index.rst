@@ -15,7 +15,7 @@ applications. It was designed to offer some new features for the auth layer, suc
 - Extensible: several parts of the code can be customized.
 - Full auth layer: views can be protected and authorized based solely on the JWT token.
 
-Details of each point will be further explained in this doc.
+Details of each point will be further explained in this doc. For a hands-on testing environment, `djwto` also offers a :download:`sandbox <../sandbox/README.md>` environment.
 
 .. toctree::
    :maxdepth: 2

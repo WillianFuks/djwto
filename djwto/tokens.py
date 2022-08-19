@@ -141,7 +141,7 @@ def process_claims(
     return claims
 
 
-def process_user(user: User) -> Dict[str, Union[str, List[str]]]:
+def process_user(user: User) -> Dict[str, Union[str, int, List[str]]]:
     """
     Process various data related to the database User object. This function can be
     replaced in order to build a different claim set for the user.

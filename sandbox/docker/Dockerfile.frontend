@@ -1,0 +1,27 @@
+FROM node:slim
+
+ARG APP_PATH=/home/node/app/
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
+RUN [ $(getent group $GROUP_ID) ] || addgroup --gid $GROUP_ID user
+RUN [ $(getent group $GROUP_ID) ] ||  adduser --disabled-password --gecos '' --uid $USER_ID --gid $GROUP_ID user
+
+WORKDIR ${APP_PATH}
+
+#COPY frontend/ ${APP_PATH}
+COPY --chmod=0555 docker/start.sh /bin
+
+ENV FRONT_APP_PORT=9000
+
+RUN set -xe && \
+  yarn global add @quasar/cli && \
+  export PATH="$(yarn global bin):$PATH" && \
+  rm -rf /tmp/*
+
+EXPOSE 9000-9001
+
+USER $USER_ID:$GROUP_ID
+
+ENTRYPOINT ["/bin/bash", "/bin/start.sh"]
+CMD ["quasar"]

@@ -33,7 +33,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
 from django.http.request import HttpRequest
-from django.http.response import HttpResponse, JsonResponse
+from django.http.response import HttpResponseBase, JsonResponse
 from django.middleware.csrf import rotate_token
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -156,7 +156,8 @@ def build_tokens_response(
         httponly=True,
         secure=True,
         path=f'/{settings.DJWTO_REFRESH_COOKIE_PATH}',
-        samesite=settings.DJWTO_SAME_SITE
+        samesite=settings.DJWTO_SAME_SITE,
+        domain=settings.DJWTO_DOMAIN
     )
     if mode == 'ONE-COOKIE':
         response.set_cookie(
@@ -165,7 +166,8 @@ def build_tokens_response(
             max_age=max_age_access,
             httponly=True,
             secure=True,
-            samesite=settings.DJWTO_SAME_SITE
+            samesite=settings.DJWTO_SAME_SITE,
+            domain=settings.DJWTO_DOMAIN
         )
         return response
     if mode == 'TWO-COOKIES':
@@ -178,7 +180,8 @@ def build_tokens_response(
             max_age=max_age_access,
             httponly=False,
             secure=True,
-            samesite=settings.DJWTO_SAME_SITE
+            samesite=settings.DJWTO_SAME_SITE,
+            domain=settings.DJWTO_DOMAIN
         )
         response.set_cookie(
             'jwt_access_token',
@@ -186,7 +189,8 @@ def build_tokens_response(
             max_age=max_age_access,
             httponly=True,
             secure=True,
-            samesite=settings.DJWTO_SAME_SITE
+            samesite=settings.DJWTO_SAME_SITE,
+            domain=settings.DJWTO_DOMAIN
         )
         return response
     raise ImproperlyConfigured(
@@ -202,7 +206,7 @@ class RefreshAccessView(View):
     @method_decorator(csrf_exempt)
     def dispatch(
         self, request: HttpRequest, *args: Any, **kwargs: Any
-    ) -> HttpResponse:
+    ) -> HttpResponseBase:
         return super().dispatch(request, *args, **kwargs)
 
     @_build_decorator(csrf_protect)
@@ -252,7 +256,7 @@ class UpdateRefreshView(View):
     @method_decorator(csrf_exempt)
     def dispatch(
         self, request: HttpRequest, *args: Any, **kwargs: Any
-    ) -> HttpResponse:
+    ) -> HttpResponseBase:
         return super().dispatch(request, *args, **kwargs)
 
     @_build_decorator(csrf_protect)
@@ -315,7 +319,7 @@ class GetTokensView(View):
     @method_decorator(csrf_exempt)
     def dispatch(
         self, request: HttpRequest, *args: Any, **kwargs: Any
-    ) -> HttpResponse:
+    ) -> HttpResponseBase:
         return super().dispatch(request, *args, **kwargs)
 
     @_build_decorator(ensure_csrf_cookie)
@@ -381,7 +385,7 @@ class ValidateTokensView(View):
     @method_decorator(csrf_exempt)
     def dispatch(
         self, request: HttpRequest, *args: Any, **kwargs: Any
-    ) -> HttpResponse:
+    ) -> HttpResponseBase:
         return super().dispatch(request, *args, **kwargs)
 
     @_build_decorator(csrf_protect)
@@ -416,7 +420,7 @@ class BlackListTokenView(View):
     @method_decorator(csrf_exempt)
     def dispatch(
         self, request: HttpRequest, *args: Any, **kwargs: Any
-    ) -> HttpResponse:
+    ) -> HttpResponseBase:
         return super().dispatch(request, *args, **kwargs)
 
     @_build_decorator(csrf_protect)
@@ -480,13 +484,23 @@ class BlackListTokenView(View):
         response = JsonResponse({'msg': 'Tokens successfully deleted.'})
         response.delete_cookie(
             'jwt_refresh',
-            path=f'/{settings.DJWTO_REFRESH_COOKIE_PATH}'
+            path=f'/{settings.DJWTO_REFRESH_COOKIE_PATH}',
+            domain=settings.DJWTO_DOMAIN
         )
 
         if settings.DJWTO_MODE == 'ONE-COOKIE':
-            response.delete_cookie('jwt_access')
+            response.delete_cookie(
+                'jwt_access',
+                domain=settings.DJWTO_DOMAIN
+            )
 
         if settings.DJWTO_MODE == 'TWO-COOKIES':
-            response.delete_cookie('jwt_access_payload')
-            response.delete_cookie('jwt_access_token')
+            response.delete_cookie(
+                'jwt_access_payload',
+                domain=settings.DJWTO_DOMAIN
+            )
+            response.delete_cookie(
+                'jwt_access_token',
+                domain=settings.DJWTO_DOMAIN
+            )
         return response

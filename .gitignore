@@ -131,3 +131,7 @@ dmypy.json
 # sqlite3 db
 tests.db.sqlite3
 tests.db
+
+# JS stuff
+yarn.lock
+node_modules

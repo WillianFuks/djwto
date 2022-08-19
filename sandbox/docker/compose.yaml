@@ -1,0 +1,75 @@
+services:
+  reverse-proxy:
+    image: "jwilder/nginx-proxy:latest"
+    container_name: "reverse-proxy"
+    entrypoint: ["./set_nginx.sh"]
+    #entrypoint: ["/app/docker-entrypoint.sh"]
+    command: "forego start -r"
+    volumes:
+      #- "vhost:/etc/nginx/vhost.d"
+      #- "certs:/etc/nginx/certs"
+      - "/run/docker.sock:/tmp/docker.sock:ro"
+      - type: bind
+        source: ./set_nginx.sh
+        target: /app/set_nginx.sh
+
+    restart: "always"
+    networks:
+      - "frontnet"
+      - "backnet"
+    ports:
+      - "80:80"
+      - "443:443"
+
+  frontend:
+    image: frontweb
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile.frontend_prod
+    command: ["serve", "/app", "--https"]
+    environment:
+      VIRTUAL_HOST: "front.domain.com"
+      VIRTUAL_PORT: 4000
+      VIRTUAL_PROTO: https
+    depends_on:
+      - reverse-proxy
+    cap_add:
+      - "NET_ADMIN"
+    tty: true
+    networks:
+      - "frontnet"
+    ports:
+      - "9001:4000"
+      - "9000:4000"
+    expose:
+      - "4000"
+    depends_on:
+      - reverse-proxy
+
+  backend:
+    image: backweb
+    build:
+      context: ../../
+      dockerfile: sandbox/docker/Dockerfile.backend
+    environment:
+      VIRTUAL_HOST: "back.domain.com"
+      VIRTUAL_PORT: 8002
+      VIRTUAL_PROTO: https
+    depends_on:
+      - reverse-proxy
+    cap_add:
+      - "NET_ADMIN"
+    tty: true
+    networks:
+      - "backnet"
+    ports:
+      - "9002:8002"
+      - "8002:8002"
+    depends_on:
+      - reverse-proxy
+    #profiles:
+      #- backend
+
+networks:
+  frontnet: {}
+  backnet: {}
