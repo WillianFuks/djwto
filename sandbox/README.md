@@ -60,3 +60,9 @@ The user is "alice" with "pass" as password. The user "bob" also exists but has 
 ## Docker
 
 A docker-compose file is also available to run djwto on a app behind nginx. Just run (inside sandbox folder) `docker compose up` and access your browser on `https://front.domain.com`. Notice that it's required to accept the self-signed certificates (including `https://back.domain.com`).
+
+The domains should be available in the hosts files (for linux OS):
+
+    # /etc/hosts
+    127.0.0.1	front.domain.com
+    127.0.0.1	back.domain.com
