@@ -17,11 +17,10 @@
 
   function loadData() {
     const csrftoken = getCookie("csrftoken");
-    console.log(`This is the obtained CSRF: ${csrftoken}`)
     const postData = new FormData()
 
     let res = api.post(
-      'https://api.example.com:8002/data/',
+      `https://${process.env.BACK_DOMAIN || 'api.example.com'}${process.env.BACK_DOMAIN !== undefined ? '' : ':8002'}/data/`,
       postData,
       {
         withCredentials: true,

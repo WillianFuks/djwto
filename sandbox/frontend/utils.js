@@ -18,7 +18,9 @@ export async function refreshToken($q, router) {
 
   let res = api
     .post(
-      "https://api.example.com:8002/api/token/refresh/refresh_access/",
+      `https://${process.env.BACK_DOMAIN || "api.example.com"}${
+        process.env.BACK_DOMAIN !== undefined ? "" : ":8002"
+      }/api/token/refresh/refresh_access/`,
       postData,
       {
         withCredentials: true,

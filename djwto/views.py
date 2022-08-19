@@ -33,7 +33,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
 from django.http.request import HttpRequest
-from django.http.response import HttpResponse, JsonResponse
+from django.http.response import HttpResponseBase, JsonResponse
 from django.middleware.csrf import rotate_token
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -206,7 +206,7 @@ class RefreshAccessView(View):
     @method_decorator(csrf_exempt)
     def dispatch(
         self, request: HttpRequest, *args: Any, **kwargs: Any
-    ) -> HttpResponse:
+    ) -> HttpResponseBase:
         return super().dispatch(request, *args, **kwargs)
 
     @_build_decorator(csrf_protect)
@@ -256,7 +256,7 @@ class UpdateRefreshView(View):
     @method_decorator(csrf_exempt)
     def dispatch(
         self, request: HttpRequest, *args: Any, **kwargs: Any
-    ) -> HttpResponse:
+    ) -> HttpResponseBase:
         return super().dispatch(request, *args, **kwargs)
 
     @_build_decorator(csrf_protect)
@@ -319,7 +319,7 @@ class GetTokensView(View):
     @method_decorator(csrf_exempt)
     def dispatch(
         self, request: HttpRequest, *args: Any, **kwargs: Any
-    ) -> HttpResponse:
+    ) -> HttpResponseBase:
         return super().dispatch(request, *args, **kwargs)
 
     @_build_decorator(ensure_csrf_cookie)
@@ -385,7 +385,7 @@ class ValidateTokensView(View):
     @method_decorator(csrf_exempt)
     def dispatch(
         self, request: HttpRequest, *args: Any, **kwargs: Any
-    ) -> HttpResponse:
+    ) -> HttpResponseBase:
         return super().dispatch(request, *args, **kwargs)
 
     @_build_decorator(csrf_protect)
@@ -420,7 +420,7 @@ class BlackListTokenView(View):
     @method_decorator(csrf_exempt)
     def dispatch(
         self, request: HttpRequest, *args: Any, **kwargs: Any
-    ) -> HttpResponse:
+    ) -> HttpResponseBase:
         return super().dispatch(request, *args, **kwargs)
 
     @_build_decorator(csrf_protect)

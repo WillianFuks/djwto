@@ -1,4 +1,5 @@
 flake8
+tox
 mock
 mypy
 django-stubs
@@ -7,3 +8,5 @@ typing_extensions
 pytest
 pytest-django
 pytest-cov
+sphinx
+sphinx_press_theme

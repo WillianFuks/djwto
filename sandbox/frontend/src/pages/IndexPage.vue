@@ -10,7 +10,7 @@
 
     <q-img
       alt="djwto logo"
-      src="~assets/logo.png"
+      src="https://raw.githubusercontent.com/WillianFuks/djwto/master/logo.png"
       width="250px"
       height="150px"
       fit="fill"
@@ -95,14 +95,13 @@
     }
 
     let res = api.post(
-      'https://api.example.com:8002/login/',
+      `https://${process.env.BACK_DOMAIN || 'api.example.com'}${process.env.BACK_DOMAIN !== undefined ? '' : ':8002'}/login/`,
       formData,
       {
         withCredentials: true,
         headers: { 'Content-Type': 'application/json' }
       }
     ).then((response) => {
-      console.log(`response is: ${JSON.stringify(response)}`)
       router.push({path: '/main'})
     }).catch((r) => {
       const error = JSON.parse(r.response.data.error)

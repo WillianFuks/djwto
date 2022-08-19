@@ -42,7 +42,7 @@ from djwto.models import JWTBlacklist
 
 @pytest.mark.django_db
 class TestGetTokensView:
-    CTPL = ('Set-Cookie: {name}={value}; expires={expires}; {http_only}'
+    CTPL = ('Set-Cookie: {name}={value}; {domain}; expires={expires}; {http_only}'
             'Max-Age={max_age}; Path={path}; SameSite={samesite}; {secure}')
     VTPL = (
         '{{"exp": {exp}, "iat": {iat}, "jti": "uuid", "nbf": {nbf}, '
@@ -327,9 +327,11 @@ class TestGetTokensView:
         now = datetime.now()
         refresh_expires = (now +
                            self.refresh_lifetime).strftime("%a, %d %b %Y %H:%M:%S GMT")
+        domain = 'Domain=test domain'
         assert str(refresh) == self.CTPL.format(
             name='jwt_refresh',
             value=self.expected_refresh_jwt,
+            domain=domain,
             expires=refresh_expires,
             http_only='HttpOnly; ',
             max_age=int(self.refresh_lifetime.total_seconds()),
@@ -345,6 +347,7 @@ class TestGetTokensView:
         assert str(access) == self.CTPL.format(
             name='jwt_access',
             value=self.expected_access_jwt,
+            domain=domain,
             expires=access_expires,
             http_only='HttpOnly; ',
             max_age=int(self.access_lifetime.total_seconds()),
@@ -390,9 +393,11 @@ class TestGetTokensView:
         now = datetime.now()
         refresh_expires = (now +
                            self.refresh_lifetime).strftime("%a, %d %b %Y %H:%M:%S GMT")
+        domain = 'Domain=test domain'
         assert str(refresh) == self.CTPL.format(
             name='jwt_refresh',
             value=self.expected_refresh_jwt,
+            domain=domain,
             expires=refresh_expires,
             http_only='HttpOnly; ',
             max_age=int(self.refresh_lifetime.total_seconds()),
@@ -408,6 +413,7 @@ class TestGetTokensView:
         assert str(access) == self.CTPL.format(
             name='jwt_access',
             value=self.expected_access_jwt,
+            domain=domain,
             expires=access_expires,
             http_only='HttpOnly; ',
             max_age=int(self.access_lifetime.total_seconds()),
@@ -455,10 +461,12 @@ class TestGetTokensView:
                            self.refresh_lifetime).strftime("%a, %d %b %Y %H:%M:%S GMT")
 
         assert 'csrftoken' in cookies
+        domain = 'Domain=test domain'
 
         assert str(refresh) == self.CTPL.format(
             name='jwt_refresh',
             value=self.expected_refresh_jwt,
+            domain=domain,
             expires=refresh_expires,
             http_only='HttpOnly; ',
             max_age=int(self.refresh_lifetime.total_seconds()),
@@ -485,6 +493,7 @@ class TestGetTokensView:
         assert str(access_payload) == self.CTPL.format(
             name='jwt_access_payload',
             value=value,
+            domain=domain,
             expires=access_expires,
             http_only='',
             max_age=int(self.access_lifetime.total_seconds()),
@@ -497,6 +506,7 @@ class TestGetTokensView:
         assert str(access_signature) == self.CTPL.format(
             name='jwt_access_token',
             value=self.expected_access_jwt,
+            domain=domain,
             expires=access_expires,
             http_only='HttpOnly; ',
             max_age=int(self.access_lifetime.total_seconds()),
@@ -542,11 +552,13 @@ class TestGetTokensView:
         now = datetime.now()
         refresh_expires = (now +
                            self.refresh_lifetime).strftime("%a, %d %b %Y %H:%M:%S GMT")
+        domain = 'Domain=test domain'
 
         assert 'csrftoken' not in cookies
         assert str(refresh) == self.CTPL.format(
             name='jwt_refresh',
             value=self.expected_refresh_jwt,
+            domain=domain,
             expires=refresh_expires,
             http_only='HttpOnly; ',
             max_age=int(self.refresh_lifetime.total_seconds()),
@@ -573,6 +585,7 @@ class TestGetTokensView:
         assert str(access_payload) == self.CTPL.format(
             name='jwt_access_payload',
             value=value,
+            domain=domain,
             expires=access_expires,
             http_only='',
             max_age=int(self.access_lifetime.total_seconds()),
@@ -585,6 +598,7 @@ class TestGetTokensView:
         assert str(access_token) == self.CTPL.format(
             name='jwt_access_token',
             value=self.expected_access_jwt,
+            domain=domain,
             expires=access_expires,
             http_only='HttpOnly; ',
             max_age=int(self.access_lifetime.total_seconds()),

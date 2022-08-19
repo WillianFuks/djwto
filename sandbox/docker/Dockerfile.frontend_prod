@@ -1,0 +1,23 @@
+FROM node:slim
+
+ENV FRONT_APP_PORT=9000
+ENV BACK_DOMAIN="back.domain.com"
+
+COPY frontend/ /staging
+
+WORKDIR /staging
+
+RUN set -xe && \
+  yarn global add @quasar/cli; \
+  export PATH="$(yarn global bin):$PATH"; \
+  yarn install; \
+  quasar build; \
+  mkdir /app; \
+  cp -r /staging/dist/spa/* /app; \
+  rm -rf /tmp/* /staging/*
+
+EXPOSE 9001
+EXPOSE 4000
+
+ENTRYPOINT ["quasar"]
+CMD ["serve", "/app"]

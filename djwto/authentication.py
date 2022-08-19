@@ -23,7 +23,7 @@
 
 import json
 from functools import wraps
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple, cast
 
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
@@ -208,7 +208,8 @@ def user_authenticate(request: HttpRequest) -> User:
     form.is_valid()
     if form.errors:
         raise ValidationError(json.dumps(dict(form.errors)))
-    user = form.get_user()
+    # cast to `User` type as `get_user` returns AbstractUser
+    user = cast(User, form.get_user())
     return user
 
 

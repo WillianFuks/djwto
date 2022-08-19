@@ -88,7 +88,7 @@
     const csrftoken = getCookie("csrftoken");
 
     let res = api.post(
-      'https://api.example.com:8002/api/token/refresh/logout/',
+      `https://${process.env.BACK_DOMAIN || 'api.example.com'}${process.env.BACK_DOMAIN !== undefined ? '' : ':8002'}/api/token/refresh/logout/`,
       postData,
       {
         withCredentials: true,
@@ -106,7 +106,7 @@
     })
 
     let del_res = api.delete(
-      'https://api.example.com:8002/api/token/refresh/logout/',
+      `https://${process.env.BACK_DOMAIN || 'api.example.com'}${process.env.BACK_DOMAIN !== undefined ? '' : ':8002'}/api/token/refresh/logout/`,
       {
         withCredentials: true,
         headers: {

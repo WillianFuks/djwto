@@ -54,6 +54,10 @@ module.exports = configure(function (/* ctx */) {
         node: "node16",
       },
 
+      env: {
+        BACK_DOMAIN: process.env.BACK_DOMAIN,
+      },
+
       vueRouterMode: "hash", // available values: 'hash', 'history'
       // vueRouterBase,
       // vueDevtools,
@@ -85,12 +89,22 @@ module.exports = configure(function (/* ctx */) {
           },
         ],
       ],
+
+      extendWebpack(cfg) {
+        cfg.watchOptions = {
+          aggregateTimeout: 200,
+          poll: 1000,
+        };
+      },
     },
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#devServer
     devServer: {
-      https: true,
-      open: true, // opens browser window automatically
+      https:
+        process.env.FRONT_HTTPS !== undefined ? process.env.FRONT_HTTPS : true,
+      open:
+        process.env.FRONT_OPEN !== undefined ? process.env.FRONT_OPEN : false, // opens browser window automatically. Set to false for the Docker environment
+      port: process.env.FRONT_APP_PORT || 9000,
     },
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#framework

@@ -10,6 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
+import os
+import uuid
 from pathlib import Path
 from datetime import timedelta
 
@@ -21,15 +23,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-gux6-m@0tj@o(g!)gy3mcq=dbynv0$bfer8afu@ex!h7#+t+@c'
+# SECRET_KEY = 'django-insecure-gux6-m@0tj@o(g!)gy3mcq=dbynv0$bfer8afu@ex!h7#+t+@c'
+SECRET_KEY = str(uuid.uuid4())
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ALLOWED_HOSTS = [
-    'api.example.com'
+    'localhost',
+    'api.example.com',
+    'back.domain.com'
 ]
-
 
 # Application definition
 
@@ -43,6 +47,7 @@ INSTALLED_APPS = [
     'djwto',
     'sslserver',
     'corsheaders',
+    'data'
 ]
 
 MIDDLEWARE = [
@@ -61,7 +66,9 @@ ROOT_URLCONF = 'backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [
+            BASE_DIR / 'data/templates'
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -83,7 +90,7 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': os.environ.get('SQLITE3_DB_PATH') or BASE_DIR / 'db.sqlite3',
     }
 }
 
@@ -133,19 +140,24 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 DJWTO_MODE = 'TWO-COOKIES'
 DJWTO_ACCESS_TOKEN_LIFETIME = timedelta(seconds=5 * 60)
 DJWTO_REFRESH_TOKEN_LIFETIME = timedelta(minutes=10 * 60)
-DJWTO_SAME_SITE = 'None'
-DJWTO_DOMAIN = 'example.com'
+DJWTO_SAME_SITE = 'Lax'
+DJWTO_DOMAIN = '.example.com'
 CSRF_COOKIE_SECURE = True
 
 # corsheaders
 CORS_ALLOWED_ORIGINS = [
     'https://example.com:9000',
+    'https://front.domain.com:9001',
+    'https://front.domain.com'
 ]
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
     'https://example.com:9000',
+    'https://front.domain.com:9001',
+    'https://front.domain.com'
 ]
 
-# CSRF_COOKIE_SAMESITE = 'None'
-CSRF_COOKIE_DOMAIN = 'example.com'
+CSRF_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_DOMAIN = '.example.com'
+# CSRF_COOKIE_DOMAIN = None

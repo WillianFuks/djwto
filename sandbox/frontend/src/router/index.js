@@ -34,29 +34,25 @@ export default route(function (/* { store, ssrContext } */) {
     history: createHistory(process.env.VUE_ROUTER_BASE),
   });
 
-  /*  Router.beforeEach((to, from, next) => {*/
-  /*console.log(`this is to: ${to}`);*/
-  /*console.log(`this is from: ${from}`);*/
-  /*if (to.name !== "login") {*/
-  /*const jwt_access = getCookie("jwt_access_payload");*/
-  /*console.log(`this is jwt_access: ${jwt_access}`);*/
-  /*if (jwt_access === void 0) {*/
-  /*const res = refreshToken();*/
-  /*res.then(() => {*/
-  /*const jwt_access2 = getCookie("jwt_access_payload");*/
-  /*if (jwt_access2 === void 0) {*/
-  /*next({ name: "login" });*/
-  /*} else {*/
-  /*next();*/
-  /*}*/
-  /*});*/
-  /*} else {*/
-  /*next();*/
-  /*}*/
-  /*} else {*/
-  /*next();*/
-  /*}*/
-  /*});*/
-
+  Router.beforeEach((to, from, next) => {
+    if (to.name !== "login") {
+      const jwt_access = getCookie("jwt_access_payload");
+      if (jwt_access === void 0) {
+        const res = refreshToken();
+        res.then(() => {
+          const jwt_access2 = getCookie("jwt_access_payload");
+          if (jwt_access2 === void 0) {
+            next({ name: "login" });
+          } else {
+            next();
+          }
+        });
+      } else {
+        next();
+      }
+    } else {
+      next();
+    }
+  });
   return Router;
 });
